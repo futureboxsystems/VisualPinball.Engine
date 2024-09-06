@@ -270,8 +270,8 @@ namespace VisualPinball.Unity
 		private readonly struct LampAction
 		{
 			public readonly LampState State;
-			public readonly IApiLamp Lamp;
-			public readonly LampMapping Mapping;
+			public readonly IApiLamp? Lamp;
+			public readonly LampMapping? Mapping;
 
 			public LampAction(LampState state)
 			{
@@ -289,7 +289,7 @@ namespace VisualPinball.Unity
 
 #if UNITY_EDITOR
 
-		private UnityEditor.EditorWindow[] _lampManagerWindows;
+		private UnityEditor.EditorWindow[]? _lampManagerWindows;
 		private bool _lampManagerWindowsInitialized;
 
 		private void RefreshUI()
@@ -303,7 +303,7 @@ namespace VisualPinball.Unity
 				_lampManagerWindowsInitialized = true;
 			}
 
-			foreach (var manager in _lampManagerWindows) {
+			foreach (var manager in _lampManagerWindows!) {
 				manager.Repaint();
 			}
 		}
