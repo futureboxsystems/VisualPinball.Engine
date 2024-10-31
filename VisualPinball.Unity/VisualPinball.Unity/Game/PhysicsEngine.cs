@@ -50,7 +50,24 @@ namespace VisualPinball.Unity
 		[NonSerialized] private NativeColliders _kinematicCollidersAtIdentity;
 		[NonSerialized] private NativeParallelHashMap<int, NativeColliderIds> _kinematicColliderLookups;
 		[NonSerialized] private NativeArray<PhysicsEnv> _physicsEnv = new(1, Allocator.Persistent);
-		[NonSerialized] private NativeQueue<EventData> _eventQueue = new(Allocator.Persistent);
+
+		// This initialization logic is very verbose. We cannot use a field initializer as we do
+		// for the other native structs, because that causes a NullReferenceException to be thrown
+		// on subsequent runs even if the NativeQueue is disposed. We cannot initialize in Awake,
+		// because other scripts may access the queue before that runs.
+		private bool isEventQueueIinitalized = false;
+		[NonSerialized] private NativeQueue<EventData> _eventQueue;
+		private NativeQueue<EventData> _EventQueue
+		{
+			get
+			{
+				if (!isEventQueueIinitalized) {
+					_eventQueue = new(Allocator.Persistent);
+					isEventQueueIinitalized = true;
+				}
+				return _eventQueue;
+			}
+		}
 
 		[NonSerialized] private NativeParallelHashMap<int, BallState> _ballStates = new(0, Allocator.Persistent);
 		[NonSerialized] private NativeParallelHashMap<int, BumperState> _bumperStates = new(0, Allocator.Persistent);
@@ -100,7 +117,7 @@ namespace VisualPinball.Unity
 
 		internal ref NativeParallelHashMap<int, BallState> Balls => ref _ballStates;
 		internal ref InsideOfs InsideOfs => ref _insideOfs;
-		internal NativeQueue<EventData>.ParallelWriter EventQueue => _eventQueue.AsParallelWriter();
+		internal NativeQueue<EventData>.ParallelWriter EventQueue => _EventQueue.AsParallelWriter();
 
 		internal void Schedule(InputAction action) => _inputActions.Enqueue(action);
 		internal ref BallState BallState(int ballId) => ref _ballStates.GetValueByRef(ballId);
@@ -247,7 +264,7 @@ namespace VisualPinball.Unity
 			}
 
 			// prepare job
-			var events = _eventQueue.AsParallelWriter();
+			var events = _EventQueue.AsParallelWriter();
 			var updatePhysics = new PhysicsUpdateJob {
 				InitialTimeUsec = NowUsec,
 				DeltaTimeMs = Time.deltaTime * 1000,
@@ -293,7 +310,7 @@ namespace VisualPinball.Unity
 			updatePhysics.Run();
 
 			// dequeue events
-			while (_eventQueue.TryDequeue(out var eventData)) {
+			while (_EventQueue.TryDequeue(out var eventData)) {
 				_player.OnEvent(in eventData);
 			}
 
@@ -418,7 +435,7 @@ namespace VisualPinball.Unity
 		private void OnDestroy()
 		{
 			_physicsEnv.Dispose();
-			_eventQueue.Dispose();
+			_EventQueue.Dispose();
 			_ballStates.Dispose();
 			_colliders.Dispose();
 			_insideOfs.Dispose();
