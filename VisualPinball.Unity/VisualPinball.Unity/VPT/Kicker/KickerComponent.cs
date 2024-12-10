@@ -41,7 +41,7 @@ namespace VisualPinball.Unity
 	[AddComponentMenu("Visual Pinball/Game Item/Kicker")]
 	public class KickerComponent : MainRenderableComponent<KickerData>,
 		ICoilDeviceComponent, ITriggerComponent, IBallCreationPosition, IOnSurfaceComponent,
-		IRotatableComponent, ISerializationCallbackReceiver, ISoundEmitter
+		IRotatableComponent, ISerializationCallbackReceiver
 	{
 		#region Data
 
@@ -67,6 +67,14 @@ namespace VisualPinball.Unity
 		[HideInInspector] public int KickerType;
 		[HideInInspector] public string MeshName;
 
+		[SerializeField]
+		private SoundComponent _ballDrainSound;
+		public SoundComponent BallDrainSound => _ballDrainSound;
+
+		[SerializeField]
+		private SoundComponent _ballReleaseSound;
+		public SoundComponent BallRelaseSound => _ballReleaseSound;
+
 		#endregion
 
 		#region Overrides and Constants
@@ -87,22 +95,6 @@ namespace VisualPinball.Unity
 
 		public const string SoundKickerDrain = "sound_kicker_drain";
 		public const string SoundKickerBallRelease = "sound_kicker_ball_release";
-
-		#endregion
-
-		#region ISoundEmitter
-
-		public SoundTrigger[] AvailableTriggers => new[] {
-			new SoundTrigger { Id = SoundKickerDrain, Name = "Ball Drain" },
-			new SoundTrigger { Id = SoundKickerBallRelease, Name = "Ball Release" },
-		};
-
-		public event EventHandler<SoundEventArgs> OnSound;
-
-		internal void EmitSound(string triggerId, float volume = 1)
-		{
-			OnSound?.Invoke(this, new SoundEventArgs(triggerId, volume));
-		}
 
 		#endregion
 

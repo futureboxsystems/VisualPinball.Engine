@@ -32,6 +32,8 @@ namespace VisualPinball.Unity.Editor
 		private SerializedProperty _scaleProperty;
 		private SerializedProperty _rotationProperty;
 		private SerializedProperty _surfaceProperty;
+		private SerializedProperty _hitSoundProperty;
+		private SerializedProperty _unhitSoundProperty;
 
 		protected override void OnEnable()
 		{
@@ -44,6 +46,8 @@ namespace VisualPinball.Unity.Editor
 			_scaleProperty = serializedObject.FindProperty(nameof(TriggerComponent.Scale));
 			_rotationProperty = serializedObject.FindProperty(nameof(TriggerComponent.Rotation));
 			_surfaceProperty = serializedObject.FindProperty(nameof(TriggerComponent._surface));
+			_hitSoundProperty = serializedObject.FindProperty("_hitSound");
+			_unhitSoundProperty = serializedObject.FindProperty("_unhitSound");
 		}
 
 		protected override void OnDisable()
@@ -66,6 +70,8 @@ namespace VisualPinball.Unity.Editor
 			PropertyField(_scaleProperty, updateTransforms: true);
 			PropertyField(_rotationProperty, updateTransforms: true);
 			PropertyField(_surfaceProperty, updateTransforms: true);
+			PropertyField(_hitSoundProperty);
+			PropertyField(_unhitSoundProperty);
 
 			DragPointsHelper.OnInspectorGUI(this);
 

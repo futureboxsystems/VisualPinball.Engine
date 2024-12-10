@@ -24,7 +24,7 @@ namespace VisualPinball.Unity
 {
 	[AddComponentMenu("Visual Pinball/Mechs/Drop Target Bank")]
 	[HelpURL("https://docs.visualpinball.org/creators-guide/manual/mechanisms/drop-target-banks.html")]
-	public class DropTargetBankComponent : MonoBehaviour, ICoilDeviceComponent, ISwitchDeviceComponent, ISoundEmitter
+	public class DropTargetBankComponent : MonoBehaviour, ICoilDeviceComponent, ISwitchDeviceComponent
 	{
 		public const string ResetCoilItem = "reset_coil";
 
@@ -38,6 +38,10 @@ namespace VisualPinball.Unity
 		[SerializeField]
 		[Tooltip("Drop Targets")]
 		public DropTargetComponent[] DropTargets = Array.Empty<DropTargetComponent>();
+
+		[SerializeField]
+		private SoundComponent _resetSound;
+		public SoundComponent ResetSound => _resetSound;
 
 		public IEnumerable<GamelogicEngineCoil> AvailableCoils => new[] {
 			new GamelogicEngineCoil(ResetCoilItem) {
@@ -70,21 +74,6 @@ namespace VisualPinball.Unity
 			var physicsEngine = GetComponentInParent<PhysicsEngine>();
 			DropTargetBankApi = new DropTargetBankApi(gameObject, player, physicsEngine);
 			player.Register(DropTargetBankApi, this);
-		}
-
-		#endregion
-
-		#region ISoundEmitter
-
-		public SoundTrigger[] AvailableTriggers => new[] {
-			new SoundTrigger { Id = SoundTargetBankReset, Name = "Sound Target Bank Reset" }
-		};
-
-		public event EventHandler<SoundEventArgs> OnSound;
-
-		internal void EmitSound(string triggerId, float volume = 1)
-		{
-			OnSound?.Invoke(this, new SoundEventArgs(triggerId, volume));
 		}
 
 		#endregion

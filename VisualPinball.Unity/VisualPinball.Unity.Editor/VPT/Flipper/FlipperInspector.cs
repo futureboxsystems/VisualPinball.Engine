@@ -41,6 +41,9 @@ namespace VisualPinball.Unity.Editor
 		private SerializedProperty _rubberWidthProperty;
 		private SerializedProperty _flipperRadiusMinProperty;
 		private SerializedProperty _flipperRadiusMaxProperty;
+		private SerializedProperty _coilOnSoundProperty;
+		private SerializedProperty _coilOffSoundProperty;
+		private SerializedProperty _coilBuzzSoundProperty;
 
 		protected override void OnEnable()
 		{
@@ -60,6 +63,9 @@ namespace VisualPinball.Unity.Editor
 			_rubberWidthProperty = serializedObject.FindProperty(nameof(FlipperComponent._rubberWidth));
 			_flipperRadiusMinProperty = serializedObject.FindProperty(nameof(FlipperComponent.FlipperRadiusMin));
 			_flipperRadiusMaxProperty = serializedObject.FindProperty(nameof(FlipperComponent.FlipperRadiusMax));
+			_coilOnSoundProperty = serializedObject.FindProperty("_coilOnSound");
+			_coilOffSoundProperty = serializedObject.FindProperty("_coilOffSound");
+			_coilBuzzSoundProperty = serializedObject.FindProperty("_coilBuzzSound");
 		}
 
 		public override void OnInspectorGUI()
@@ -94,6 +100,10 @@ namespace VisualPinball.Unity.Editor
 				PropertyField(_rubberWidthProperty, rebuildMesh: true, onChanged: OnRubberSizeUpdated);
 			}
 			EditorGUILayout.EndFoldoutHeaderGroup();
+
+			PropertyField(_coilOnSoundProperty);
+			PropertyField(_coilOffSoundProperty);
+			PropertyField(_coilBuzzSoundProperty);
 
 			base.OnInspectorGUI();
 

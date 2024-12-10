@@ -23,7 +23,7 @@ namespace VisualPinball.Unity
 {
 	[AddComponentMenu("Visual Pinball/Collision/Drop Target Collider")]
 	[RequireComponent(typeof(DropTargetComponent))]
-	public class DropTargetColliderComponent : ColliderComponent<HitTargetData, TargetComponent>
+	public class DropTargetColliderComponent : ColliderComponent<HitTargetData, DropTargetComponent>
 	{
 		#region Data
 
@@ -61,6 +61,6 @@ namespace VisualPinball.Unity
 		public override PhysicsMaterialData PhysicsMaterialData => GetPhysicsMaterialData(Elasticity, ElasticityFalloff, Friction, Scatter, OverwritePhysics);
 
 		protected override IApiColliderGenerator InstantiateColliderApi(Player player, PhysicsEngine physicsEngine)
-			=> (MainComponent as DropTargetComponent)?.DropTargetApi ?? new DropTargetApi(gameObject, player, physicsEngine);
+			=> MainComponent.DropTargetApi ?? new DropTargetApi(gameObject, player, physicsEngine);
 	}
 }

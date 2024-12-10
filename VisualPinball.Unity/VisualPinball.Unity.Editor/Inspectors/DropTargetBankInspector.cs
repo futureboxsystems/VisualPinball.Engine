@@ -22,7 +22,7 @@ using UnityEngine;
 namespace VisualPinball.Unity.Editor
 {
 	[CustomEditor(typeof(DropTargetBankComponent)), CanEditMultipleObjects]
-	public class DropTargetBankInspector : ItemInspector
+	public class DropTargetBankInspector: ItemInspector
 	{
 		private static readonly string[] BankSizeLabels = {
 			"Single",
@@ -54,6 +54,7 @@ namespace VisualPinball.Unity.Editor
 
 		private SerializedProperty _bankSizeProperty;
 		private SerializedProperty _dropTargetsProperty;
+		private SerializedProperty _resetSoundProperty;
 
 		protected override MonoBehaviour UndoTarget => target as MonoBehaviour;
 
@@ -63,6 +64,7 @@ namespace VisualPinball.Unity.Editor
 
 			_bankSizeProperty = serializedObject.FindProperty(nameof(DropTargetBankComponent.BankSize));
 			_dropTargetsProperty = serializedObject.FindProperty(nameof(DropTargetBankComponent.DropTargets));
+			_resetSoundProperty = serializedObject.FindProperty("_resetSound");
 		}
 
 		public override void OnInspectorGUI()
@@ -92,6 +94,8 @@ namespace VisualPinball.Unity.Editor
 					EditorGUI.indentLevel--;
 				}
 				EditorGUILayout.EndFoldoutHeaderGroup();
+
+				PropertyField(_resetSoundProperty);
 			}
 
 			base.OnInspectorGUI();

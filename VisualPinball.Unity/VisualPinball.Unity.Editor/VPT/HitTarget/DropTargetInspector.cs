@@ -29,5 +29,19 @@ namespace VisualPinball.Unity.Editor
 			{ "Simple Flat", Engine.VPT.TargetType.DropTargetFlatSimple },
 			{ "Simple", Engine.VPT.TargetType.DropTargetSimple },
 		};
+
+		private SerializedProperty _resetSoundProperty;
+
+		protected override void OnEnable()
+		{
+			base.OnEnable();
+			_resetSoundProperty = serializedObject.FindProperty("_resetSound");
+		}
+
+		protected override void DrawPropertyFields()
+		{
+			base.DrawPropertyFields();
+			PropertyField(_resetSoundProperty);
+		}
 	}
 }

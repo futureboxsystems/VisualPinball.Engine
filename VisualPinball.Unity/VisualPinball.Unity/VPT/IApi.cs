@@ -219,6 +219,7 @@ namespace VisualPinball.Unity
 		/// </summary>
 		/// <param name="enabled">Whether the coil was enabled (power) or disabled (no power).</param>
 		void OnCoil(bool enabled);
+
 	}
 
 	/// <summary>

@@ -16,7 +16,6 @@
 
 // ReSharper disable AssignmentInConditionalExpression
 
-using System;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEditor;
@@ -48,6 +47,8 @@ namespace VisualPinball.Unity.Editor
 		private SerializedProperty _kickerTypeProperty;
 		private SerializedProperty _meshNameProperty;
 		private SerializedProperty _coilsProperty;
+		private SerializedProperty _ballReleaseSoundProperty;
+		private SerializedProperty _ballDrainSoundProperty;
 
 		protected override void OnEnable()
 		{
@@ -60,6 +61,8 @@ namespace VisualPinball.Unity.Editor
 			_kickerTypeProperty = serializedObject.FindProperty(nameof(KickerComponent.KickerType));
 			_meshNameProperty = serializedObject.FindProperty(nameof(KickerComponent.MeshName));
 			_coilsProperty = serializedObject.FindProperty(nameof(KickerComponent.Coils));
+			_ballReleaseSoundProperty = serializedObject.FindProperty("_ballReleaseSound");
+			_ballDrainSoundProperty = serializedObject.FindProperty("_ballDrainSound");
 		}
 
 		public override void OnInspectorGUI()
@@ -84,6 +87,8 @@ namespace VisualPinball.Unity.Editor
 			MeshDropdownProperty("Mesh", _meshNameProperty, MeshFolder, MainComponent.gameObject, _kickerTypeProperty, TypeMap);
 
 			PropertyField(_coilsProperty);
+			PropertyField(_ballReleaseSoundProperty);
+			PropertyField(_ballDrainSoundProperty);
 
 			base.OnInspectorGUI();
 

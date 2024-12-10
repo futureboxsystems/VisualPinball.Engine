@@ -92,14 +92,16 @@ namespace VisualPinball.Unity
 				Switch?.Invoke(this, new SwitchEventArgs(false, ballId));
 				OnSwitch(false);
 
-				MainComponent.EmitSound(TriggerComponent.SoundTriggerUnhit);
+				if (MainComponent.HitSound != null)
+                    MainComponent.HitSound.Play();
 
 			} else {
 				Hit?.Invoke(this, new HitEventArgs(ballId));
 				Switch?.Invoke(this, new SwitchEventArgs(true, ballId));
 				OnSwitch(true);
 
-				MainComponent.EmitSound(TriggerComponent.SoundTriggerHit);
+				if (MainComponent.UnhitSound != null)
+                    MainComponent.UnhitSound.Play();
 			}
 		}
 

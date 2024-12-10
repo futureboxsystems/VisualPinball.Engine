@@ -32,7 +32,7 @@ namespace VisualPinball.Unity
 
 	[AddComponentMenu("Visual Pinball/Mechs/Score Motor")]
 	[HelpURL("https://docs.visualpinball.org/creators-guide/manual/mechanisms/score-motors.html")]
-	public class ScoreMotorComponent : MonoBehaviour, ISwitchDeviceComponent, ISoundEmitter
+	public class ScoreMotorComponent : MonoBehaviour, ISwitchDeviceComponent
 	{
 		public const int MaxIncrease = 5;
 
@@ -46,6 +46,14 @@ namespace VisualPinball.Unity
 
 		[Tooltip("Disable to allow single point scores while score motor running.")]
 		public bool BlockScoring = true;
+
+		[SerializeField]
+		private SoundComponent _runningSound;
+		public SoundComponent RunningSound => _runningSound;
+
+		[SerializeField]
+		private SoundComponent _stepSound;
+		public SoundComponent StepSound => _stepSound;
 
 		public List<ScoreMotorTiming> ScoreMotorTimingList = new List<ScoreMotorTiming>() {
 			new ScoreMotorTiming(),
@@ -268,25 +276,6 @@ namespace VisualPinball.Unity
 			}
 
 			return newScore;
-		}
-
-		#endregion
-
-
-
-		#region ISoundEmitter
-
-		public SoundTrigger[] AvailableTriggers => new[] {
-			new SoundTrigger { Id = SoundScoreMotorStart, Name = "Sound Score Motor Start" },
-			new SoundTrigger { Id = SoundScoreMotorStop, Name = "Sound Score Motor Stop" },
-			new SoundTrigger { Id = SoundScoreMotorStep, Name = "Sound Score Motor Step" }
-		};
-
-		public event EventHandler<SoundEventArgs> OnSound;
-
-		internal void EmitSound(string triggerId, float volume = 1)
-		{
-			OnSound?.Invoke(this, new SoundEventArgs(triggerId, volume));
 		}
 
 		#endregion

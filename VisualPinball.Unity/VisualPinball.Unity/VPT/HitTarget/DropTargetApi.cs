@@ -15,13 +15,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 using VisualPinball.Engine.VPT.HitTarget;
 
 namespace VisualPinball.Unity
 {
-	public class DropTargetApi : CollidableApi<TargetComponent, DropTargetColliderComponent, HitTargetData>,
+	public class DropTargetApi : CollidableApi<DropTargetComponent, DropTargetColliderComponent, HitTargetData>,
 		IApi, IApiHittable, IApiSwitch, IApiSwitchDevice, IApiDroppable
 	{
 		/// <summary>
@@ -127,13 +126,16 @@ namespace VisualPinball.Unity
 		{
 			Hit?.Invoke(this, new HitEventArgs(ballId));
 
-			MainComponent.EmitSound(TargetComponent.SoundTargetHit);
+			if (MainComponent.HitSound != null)
+				MainComponent.HitSound.Play();
 		}
+
 		void IApiDroppable.OnDropStatusChanged(bool isDropped, int ballId)
 		{
 			if (!isDropped)
 			{
-				MainComponent.EmitSound(DropTargetComponent.SoundTargetReset);
+				if (MainComponent.ResetSound != null)
+					MainComponent.ResetSound.Play();
 			}
 		}
 

@@ -39,7 +39,7 @@ namespace VisualPinball.Unity
 	[HelpURL("https://docs.visualpinball.org/creators-guide/manual/mechanisms/flippers.html")]
 	public class FlipperComponent : MainRenderableComponent<FlipperData>,
 		IFlipperData, ISwitchDeviceComponent, ICoilDeviceComponent, IOnSurfaceComponent,
-		IRotatableComponent, ISoundEmitter
+		IRotatableComponent
 	{
 		#region Data
 
@@ -112,6 +112,18 @@ namespace VisualPinball.Unity
 		[HideInInspector]
 		public bool InstantiateAsPrefab;
 
+		[SerializeField]
+		private SoundComponent _coilOnSound;
+		public SoundComponent CoilOnSound => _coilOnSound;
+
+		[SerializeField]
+		private SoundComponent _coilOffSound;
+		public SoundComponent CoilOffSound => _coilOffSound;
+
+		[SerializeField]
+		private SoundComponent _coilBuzzSound;
+		public SoundComponent CoilBuzzSound => _coilBuzzSound;
+
 		#endregion
 
 		#region Overrides and Constants
@@ -130,31 +142,7 @@ namespace VisualPinball.Unity
 		public const string HoldCoilItem = "hold_coil";
 		public const string EosSwitchItem = "eos_switch";
 
-		public const string SoundCoilOn = "sound_coil_on";
-		public const string SoundCoilOff = "sound_coil_off";
-		public const string SoundCoilCollision = "sound_ball_collision";
-
 		#endregion
-
-		#region ISoundEmitter
-
-		public SoundTrigger[] AvailableTriggers => new[] {
-			new SoundTrigger { Id = SoundCoilOn, Name = "Coil On" },
-			new SoundTrigger { Id = SoundCoilOff, Name = "Coil Off"},
-			new SoundTrigger { Id = SoundCoilCollision, Name = "Ball Collision" },
-		};
-
-		public event EventHandler<SoundEventArgs> OnSound;
-
-		internal void EmitSound(string triggerId, float volume = 1)
-		{
-			OnSound?.Invoke(this, new SoundEventArgs(triggerId, volume));
-		}
-
-		#endregion
-
-
-
 
 		#region Wiring
 

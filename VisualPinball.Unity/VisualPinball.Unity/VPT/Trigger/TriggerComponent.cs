@@ -37,7 +37,7 @@ namespace VisualPinball.Unity
 {
 	[AddComponentMenu("Visual Pinball/Game Item/Trigger")]
 	public class TriggerComponent : MainRenderableComponent<TriggerData>,
-		ITriggerComponent, IOnSurfaceComponent, ISoundEmitter
+		ITriggerComponent, IOnSurfaceComponent
 	{
 		#region Data
 
@@ -62,6 +62,14 @@ namespace VisualPinball.Unity
 		private DragPointData[] _dragPoints;
 		public DragPointData[] DragPoints { get => _dragPoints; set => _dragPoints = value; }
 
+		[SerializeField]
+		private SoundComponent _hitSound;
+		public SoundComponent HitSound => _hitSound;
+
+		[SerializeField]
+		private SoundComponent _unhitSound;
+		public SoundComponent UnhitSound => _unhitSound;
+
 		#endregion
 
 		#region Overrides and Constants
@@ -77,8 +85,6 @@ namespace VisualPinball.Unity
 		protected override Type ColliderComponentType { get; } = typeof(ColliderComponent<TriggerData, TriggerComponent>);
 
 		public const string SwitchItem = "trigger_switch";
-		public const string SoundTriggerHit = "sound_trigger_hit";
-		public const string SoundTriggerUnhit = "sound_trigger_unhit";
 
 		#endregion
 
@@ -324,22 +330,6 @@ namespace VisualPinball.Unity
 		}
 		public override Vector3 GetEditorRotation() => new Vector3(Rotation, 0f, 0f);
 		public override void SetEditorRotation(Vector3 rot) => Rotation = ClampDegrees(rot.x);
-
-		#endregion
-
-		#region ISoundEmitter
-
-		public SoundTrigger[] AvailableTriggers => new[] {
-			new SoundTrigger { Id = SoundTriggerHit, Name = "Sound Trigger Hit" },
-			new SoundTrigger { Id = SoundTriggerUnhit, Name = "Sound Trigger Unhit" }
-		};
-
-		public event EventHandler<SoundEventArgs> OnSound;
-
-		internal void EmitSound(string triggerId, float volume = 1)
-		{
-			OnSound?.Invoke(this, new SoundEventArgs(triggerId, volume));
-		}
 
 		#endregion
 	}

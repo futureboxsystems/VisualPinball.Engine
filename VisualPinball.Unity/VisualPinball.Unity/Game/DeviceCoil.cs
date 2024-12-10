@@ -21,7 +21,19 @@ namespace VisualPinball.Unity
 {
 	public class DeviceCoil : IApiCoil
 	{
-		public bool IsEnabled;
+		private bool isEnabled = false;
+		public bool IsEnabled
+		{
+			get => isEnabled;
+			private set
+			{
+				if (value != isEnabled) {
+					isEnabled = value;
+					IsEnabledChanged?.Invoke(this, value);
+				}
+			}
+		}
+		public event EventHandler<bool> IsEnabledChanged;
 
 		protected Action OnEnable;
 		protected Action OnDisable;

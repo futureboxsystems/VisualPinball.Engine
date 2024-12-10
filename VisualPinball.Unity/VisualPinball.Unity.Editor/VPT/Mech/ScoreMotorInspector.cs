@@ -30,6 +30,8 @@ namespace VisualPinball.Unity.Editor
 		private SerializedProperty _durationProperty;
 		private SerializedProperty _blockScoringProperty;
 		private SerializedProperty _scoreMotorTimingListProperty;
+		private SerializedProperty _stepSoundProperty;
+		private SerializedProperty _runningSoundProperty;
 
 		private List<ReorderableList> scoreMotorTimingReorderableList = new List<ReorderableList>();
 
@@ -43,6 +45,8 @@ namespace VisualPinball.Unity.Editor
 			_durationProperty = serializedObject.FindProperty(nameof(ScoreMotorComponent.Duration));
 			_blockScoringProperty = serializedObject.FindProperty(nameof(ScoreMotorComponent.BlockScoring));
 			_scoreMotorTimingListProperty = serializedObject.FindProperty(nameof(ScoreMotorComponent.ScoreMotorTimingList));
+			_stepSoundProperty = serializedObject.FindProperty("_stepSound");
+			_runningSoundProperty = serializedObject.FindProperty("_runningSound");
 
 			for (var index = 0; index < _scoreMotorTimingListProperty.arraySize; index++) {
 				var actionsProperty = _scoreMotorTimingListProperty.GetArrayElementAtIndex(index).FindPropertyRelative(nameof(ScoreMotorTiming.Actions));
@@ -75,6 +79,9 @@ namespace VisualPinball.Unity.Editor
 					scoreMotorTimingReorderableList[index].DoLayoutList();
 				}
 			}
+
+			PropertyField(_stepSoundProperty);
+			PropertyField(_runningSoundProperty);
 
 			base.OnInspectorGUI();
 

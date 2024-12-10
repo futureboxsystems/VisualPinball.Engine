@@ -18,7 +18,6 @@
 
 using System.Collections.Generic;
 using UnityEditor;
-using UnityEngine;
 using VisualPinball.Engine.VPT.HitTarget;
 
 namespace VisualPinball.Unity.Editor
@@ -30,6 +29,7 @@ namespace VisualPinball.Unity.Editor
 		private SerializedProperty _sizeProperty;
 		private SerializedProperty _meshNameProperty;
 		private SerializedProperty _typeNameProperty;
+		private SerializedProperty _hitSoundProperty;
 
 		protected abstract string MeshAssetFolder { get; }
 		protected abstract Dictionary<string, int> MeshTypeMapping { get; }
@@ -43,6 +43,7 @@ namespace VisualPinball.Unity.Editor
 			_sizeProperty = serializedObject.FindProperty(nameof(TargetComponent.Size));
 			_meshNameProperty = serializedObject.FindProperty(nameof(TargetComponent._meshName));
 			_typeNameProperty = serializedObject.FindProperty(nameof(TargetComponent._targetType));
+			_hitSoundProperty = serializedObject.FindProperty("_hitSound");
 		}
 
 		public override void OnInspectorGUI()
@@ -55,13 +56,19 @@ namespace VisualPinball.Unity.Editor
 
 			OnPreInspectorGUI();
 
-			PropertyField(_positionProperty, updateTransforms: true);
-			PropertyField(_rotationProperty, updateTransforms: true);
-			PropertyField(_sizeProperty, updateTransforms: true);
+			DrawPropertyFields();
 
 			MeshDropdownProperty("Mesh", _meshNameProperty, MeshAssetFolder, MainComponent.gameObject, _typeNameProperty, MeshTypeMapping);
 
 			EndEditing();
+		}
+
+		protected virtual void DrawPropertyFields()
+		{
+			PropertyField(_positionProperty, updateTransforms: true);
+			PropertyField(_rotationProperty, updateTransforms: true);
+			PropertyField(_sizeProperty, updateTransforms: true);
+			PropertyField(_hitSoundProperty);
 		}
 	}
 }

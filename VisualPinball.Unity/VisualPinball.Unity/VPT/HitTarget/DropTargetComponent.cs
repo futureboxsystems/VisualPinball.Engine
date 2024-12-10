@@ -28,6 +28,10 @@ namespace VisualPinball.Unity
 	[AddComponentMenu("Visual Pinball/Game Item/Drop Target")]
 	public class DropTargetComponent : TargetComponent
 	{
+		[SerializeField]
+		private SoundComponent _resetSound;
+		public SoundComponent ResetSound => _resetSound;
+
 		public override bool IsLegacy {
 			get {
 				var colliderComponent = GetComponent<DropTargetColliderComponent>();
@@ -41,12 +45,6 @@ namespace VisualPinball.Unity
 				return animationComponent && animationComponent.IsDropped ? -DropTargetAnimationState.DropTargetLimit : 0f;
 			}
 		}
-
-		#region Overrides and Constants
-
-		public const string SoundTargetReset = "sound_target_reset";
-
-		#endregion
 
 		#region Conversion
 
@@ -179,15 +177,6 @@ namespace VisualPinball.Unity
 				animationData
 			);
 		}
-
-		#endregion
-
-		#region ISoundEmitter
-
-		public override SoundTrigger[] AvailableTriggers => new[] {
-			new SoundTrigger { Id = SoundTargetHit, Name = "Target Drop" },
-			new SoundTrigger { Id = SoundTargetReset, Name = "Target Reset" },
-		};
 
 		#endregion
 	}

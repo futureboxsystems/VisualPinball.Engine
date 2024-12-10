@@ -103,7 +103,8 @@ namespace VisualPinball.Unity
 				dropTargetApi.IsDropped = false;
 			}
 
-			_dropTargetBankComponent.EmitSound(DropTargetBankComponent.SoundTargetBankReset);
+			if(_dropTargetBankComponent.ResetSound != null)
+				_dropTargetBankComponent.ResetSound.Play();
 		}
 
 		void IApi.OnDestroy()

@@ -19,10 +19,6 @@ using UnityEngine;
 using VisualPinball.Engine.VPT.Bumper;
 using System.Collections.Generic;
 using Unity.Mathematics;
-using static UnityEngine.UI.Scrollbar;
-using VisualPinball.Engine.PinMAME.MPUs;
-using VisualPinball.Engine.VPT;
-using JetBrains.Annotations;
 
 namespace VisualPinball.Unity
 {
@@ -166,7 +162,8 @@ namespace VisualPinball.Unity
 				}
 			}
 
-			MainComponent.EmitSound(BumperComponent.SoundBumperHit);
+			if (MainComponent.HitSound != null)
+				MainComponent.HitSound.Play();
 		}
 
 		#endregion

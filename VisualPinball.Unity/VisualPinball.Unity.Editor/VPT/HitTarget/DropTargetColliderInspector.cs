@@ -19,7 +19,7 @@ using UnityEditor;
 namespace VisualPinball.Unity.Editor
 {
 	[CustomEditor(typeof(DropTargetColliderComponent)), CanEditMultipleObjects]
-	public class DropTargetColliderInspector : TargetColliderInspector<DropTargetColliderComponent>
+	public class DropTargetColliderInspector : TargetColliderInspector<DropTargetColliderComponent, DropTargetComponent>
 	{
 		private SerializedProperty _isLegacyProperty;
 
@@ -28,6 +28,7 @@ namespace VisualPinball.Unity.Editor
 			base.OnEnable();
 			_isLegacyProperty = serializedObject.FindProperty(nameof(DropTargetColliderComponent.IsLegacy));
 		}
+
 		protected override void OnTargetInspectorGUI()
 		{
 			PropertyField(_isLegacyProperty, "Legacy Collider", updateColliders: true);

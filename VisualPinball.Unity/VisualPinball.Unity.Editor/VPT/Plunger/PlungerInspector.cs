@@ -29,6 +29,10 @@ namespace VisualPinball.Unity.Editor
 		private SerializedProperty _heightProperty;
 		private SerializedProperty _zAdjustProperty;
 		private SerializedProperty _surfaceProperty;
+		private SerializedProperty _pullSoundProperty;
+		private SerializedProperty _releaseSoundProperty;
+		private SerializedProperty _holdSoundProperty;
+
 
 		protected override void OnEnable()
 		{
@@ -39,6 +43,9 @@ namespace VisualPinball.Unity.Editor
 			_heightProperty = serializedObject.FindProperty(nameof(PlungerComponent.Height));
 			_zAdjustProperty = serializedObject.FindProperty(nameof(PlungerComponent.ZAdjust));
 			_surfaceProperty = serializedObject.FindProperty(nameof(PlungerComponent._surface));
+			_pullSoundProperty = serializedObject.FindProperty("_pullSound");
+			_releaseSoundProperty = serializedObject.FindProperty("_releaseSound");
+			_holdSoundProperty = serializedObject.FindProperty("_holdSound");
 		}
 
 		public override void OnInspectorGUI()
@@ -56,6 +63,9 @@ namespace VisualPinball.Unity.Editor
 			PropertyField(_heightProperty, rebuildMesh: true);
 			PropertyField(_zAdjustProperty, rebuildMesh: true);
 			PropertyField(_surfaceProperty, rebuildMesh: true);
+			PropertyField(_pullSoundProperty);
+			PropertyField(_releaseSoundProperty);
+			PropertyField(_holdSoundProperty);
 
 			base.OnInspectorGUI();
 

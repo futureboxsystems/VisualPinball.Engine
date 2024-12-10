@@ -21,8 +21,9 @@ using VisualPinball.Engine.VPT.HitTarget;
 
 namespace VisualPinball.Unity.Editor
 {
-	public abstract class TargetColliderInspector<TColliderComponent> : ColliderInspector<HitTargetData, TargetComponent, TColliderComponent>
-		where TColliderComponent : ColliderComponent<HitTargetData, TargetComponent>
+	public abstract class TargetColliderInspector<TColliderComponent, TTargetComponent> : ColliderInspector<HitTargetData, TTargetComponent, TColliderComponent>
+		where TColliderComponent : ColliderComponent<HitTargetData, TTargetComponent>
+		where TTargetComponent : MainRenderableComponent<HitTargetData>
 	{
 		private bool _foldoutMaterial = true;
 

@@ -32,7 +32,7 @@ namespace VisualPinball.Unity
 {
 	[AddComponentMenu("Visual Pinball/Game Item/Plunger")]
 	public class PlungerComponent : MainRenderableComponent<PlungerData>,
-		ICoilDeviceComponent, IOnSurfaceComponent, ISoundEmitter
+		ICoilDeviceComponent, IOnSurfaceComponent
 	{
 		#region Data
 
@@ -50,6 +50,18 @@ namespace VisualPinball.Unity
 		[TypeRestriction(typeof(ISurfaceComponent), PickerLabel = "Walls & Ramps", UpdateTransforms = true)]
 		[Tooltip("On which surface this plunger is attached to. Updates Z-translation.")]
 		public MonoBehaviour _surface;
+
+		[SerializeField]
+		private SoundComponent _pullSound;
+		public SoundComponent PullSound => _pullSound;
+
+		[SerializeField]
+		private SoundComponent _releaseSound;
+		public SoundComponent ReleaseSound => _releaseSound;
+
+		[SerializeField]
+		private SoundComponent _holdSound;
+		public SoundComponent HoldSound => _holdSound;
 
 		#endregion
 
@@ -69,25 +81,6 @@ namespace VisualPinball.Unity
 
 		public const string PullCoilId = "c_pull";
 		public const string FireCoilId = "c_autofire";
-
-		public const string SoundPlungerPull = "sound_plunger_pull";
-		public const string SoundPlungerRelease = "sound_plunger_release";
-
-		#endregion
-
-		#region ISoundEmitter
-
-		public SoundTrigger[] AvailableTriggers => new[] {
-			new SoundTrigger { Id = SoundPlungerPull, Name = "Plunger Pull" },
-			new SoundTrigger { Id = SoundPlungerRelease, Name = "Plunger Release"}
-		};
-
-		public event EventHandler<SoundEventArgs> OnSound;
-
-		internal void EmitSound(string triggerId, float volume = 1)
-		{
-			OnSound?.Invoke(this, new SoundEventArgs(triggerId, volume));
-		}
 
 		#endregion
 
