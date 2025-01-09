@@ -46,6 +46,11 @@ namespace VisualPinball.Unity
 		/// </summary>
 		public event EventHandler<SwitchEventArgs> Switch;
 
+		/// <summary>
+		/// Event emitted when the bumper coil is turned on or off.
+		/// </summary>
+		public event EventHandler<NoIdCoilEventArgs> CoilStatusChanged;
+
 		private readonly PhysicsEngine _physicsEngine;
 		private int switchColliderId;
 
@@ -100,6 +105,8 @@ namespace VisualPinball.Unity
 					}
 				});
 			}
+
+			CoilStatusChanged?.Invoke(this, new NoIdCoilEventArgs(enabled));
 		}
 
 		void IApiWireDest.OnChange(bool enabled) => (this as IApiCoil).OnCoil(enabled);
