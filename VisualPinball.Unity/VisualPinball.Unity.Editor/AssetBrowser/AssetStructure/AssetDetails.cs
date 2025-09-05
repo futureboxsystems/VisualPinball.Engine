@@ -74,9 +74,11 @@ namespace VisualPinball.Unity.Editor
 		private readonly Label _emptyLabel;
 
 		private readonly AssetMaterialVariationsElement _materialVariations;
+		private readonly AssetDecalVariationsElement _decalVariations;
 		private readonly Toggle _replaceSelectedKeepName;
 		private readonly Button _addButton;
 		private readonly string _addButtonText;
+		private AssetMaterialCombinationElement _selectedMaterialElement;
 
 		public AssetDetails()
 		{
@@ -108,10 +110,12 @@ namespace VisualPinball.Unity.Editor
 			_addButton = _bodyReadOnly.Q<Button>("add-selected");
 			_addButtonText = _addButton.text;
 			_materialVariations = _bodyReadOnly.Q<AssetMaterialVariationsElement>("material-variations");
+			_decalVariations = _bodyReadOnly.Q<AssetDecalVariationsElement>("decal-variations");
 			_replaceSelectedKeepName = _bodyReadOnly.Q<Toggle>("replace-selected-keep-name");
 
 			// setup events
 			_materialVariations.OnSelected += OnVariationSelected;
+			_decalVariations.OnSelected += OnDecalVariationSelected;
 			_body.Q<ListView>("variations").itemsAdded += OnNewMaterialVariation;
 			_bodyReadOnly.Q<Button>("replace-selected").clicked += OnReplaceSelected;
 			_addButton.clicked += OnAddSelected;
@@ -126,8 +130,7 @@ namespace VisualPinball.Unity.Editor
 		{
 			foreach (var i in ints) {
 				_asset.MaterialVariations[i].Name = string.Empty;
-				_asset.MaterialVariations[i].Object = null;
-				_asset.MaterialVariations[i].Slot = 0;
+				_asset.MaterialVariations[i].Target = new AssetMaterialTarget();
 				_asset.MaterialVariations[i].Overrides = new List<AssetMaterialOverride>();
 			}
 		}
@@ -147,7 +150,27 @@ namespace VisualPinball.Unity.Editor
 		{
 			_header.Q<Label>("title").text = asset.Name;
 			_header.Q<Image>("library-icon").image = Icons.AssetLibrary(IconSize.Small);
-			_header.Q<Label>("library-name").text = asset.Library != null ? asset.Library.Name : "<no library>";
+
+			if (asset.ThumbCameraPos == default) {
+				asset.ThumbCameraPos = new Vector3(0, asset.ThumbCameraHeight, 0);
+			}
+
+			var libraries = asset.Libraries;
+			switch (libraries.Length) {
+				case 0:
+					_header.Q<Label>("library-name").text = "<no library>";
+					break;
+				case > 0:
+					if (libraries.Length == 1 && asset.Library != libraries[0]) {
+						_header.Q<Label>("library-name").text = $"{libraries[0].Name} (⚠️ \u2260{asset.Library.Name})";
+					} else {
+						_header.Q<Label>("library-name").text = string.Join(", ", libraries.Select(l => l.Name));
+					}
+					break;
+				default:
+					_header.Q<Label>("library-name").text = asset.Library != null ? asset.Library.Name : "<no library>";
+					break;
+			}
 
 			_header.Q<Image>("category-icon").image = EditorGUIUtility.IconContent("d_Folder Icon").image;
 			_header.Q<Label>("category-name").text = asset.Category?.Name ?? "<no category>";
@@ -172,14 +195,14 @@ namespace VisualPinball.Unity.Editor
 		{
 			var bgo = _body.Q<ObjectDropdownElement>("environment-field");
 			var bgParent = SceneManager.GetActiveScene().GetRootGameObjects()
-					.FirstOrDefault(go => go.name == "_BackgroundObjects");
+					.FirstOrDefault(go => go.name == "Environment");
 			
 			if (bgParent == null) {
 				bgo.visible = false;
 				return;
 			}
 			bgo.visible = true;
-			bgo.Value = _asset.EnvironmentGameObjectName != null ? bgParent.transform.Find(_asset.EnvironmentGameObjectName)?.gameObject : null;
+			bgo.Value = _asset?.EnvironmentGameObjectName != null ? bgParent.transform.Find(_asset.EnvironmentGameObjectName)?.gameObject : null;
 			bgo.AddObjectsToDropdown<MeshRenderer>(bgParent, true);
 			bgo.RegisterValueChangedCallback(OnThumbEnvironmentChanged);
 		}
@@ -213,6 +236,7 @@ namespace VisualPinball.Unity.Editor
 		{
 			// material variations
 			_materialVariations.SetValue(asset);
+			_decalVariations.SetValue(asset, null);
 			_addButton.text = _addButtonText;
 
 			// tags
@@ -273,8 +297,8 @@ namespace VisualPinball.Unity.Editor
 			var go = InstantiateAsset(parentTransform);
 
 			// move to the middle of the playfield
-			go.transform.localPosition = new Vector3(Physics.ScaleToWorld(pf.Width / 2), 0, -Physics.ScaleToWorld(pf.Height / 2));
 			if (pf != null && go.GetComponent(typeof(IMainRenderableComponent)) is IMainRenderableComponent comp) {
+				go.transform.localPosition = new Vector3(Physics.ScaleToWorld(pf.Width / 2), 0, -Physics.ScaleToWorld(pf.Height / 2));
 				comp.UpdateTransforms();
 			}
 
@@ -310,7 +334,6 @@ namespace VisualPinball.Unity.Editor
 				if (go.GetComponent(typeof(IMainRenderableComponent)) is IMainRenderableComponent comp) {
 					comp.CopyFromObject(selected);
 				}
-				go.name = selected.name;
 				go.transform.localPosition = selected.transform.localPosition;
 				go.transform.localRotation = selected.transform.localRotation;
 				go.transform.localScale = selected.transform.localScale;
@@ -365,14 +388,29 @@ namespace VisualPinball.Unity.Editor
 
 		private void ApplyVariation(GameObject go)
 		{
-			_materialVariations.SelectedMaterialCombination?.Combination.ApplyMaterial(go);
+			if (_decalVariations.SelectedMaterialCombination != null) {
+				_decalVariations.SelectedMaterialCombination.Combination.ApplyMaterial(go);
+			} else {
+				_materialVariations.SelectedMaterialCombination?.Combination.ApplyMaterial(go);
+			}
 		}
 
 		private void OnVariationSelected(object sender, AssetMaterialCombinationElement el)
 		{
 			_addButton.text = el == null
 				? _addButtonText
-				: $"Add {el.Name}";
+				: $"Add {el.Q<Label>()?.text ?? "selected"}";
+			_selectedMaterialElement = el;
+			_decalVariations.SetValue(Asset, el?.Combination);
+		}
+
+		private void OnDecalVariationSelected(object sender, AssetMaterialCombinationElement decalEl)
+		{
+			if (decalEl == null) {
+				OnVariationSelected(null, _selectedMaterialElement);
+			} else {
+				_addButton.text = $"Add {decalEl.Q<Label>()?.text ?? "decal variation"}";
+			}
 		}
 
 		#endregion

@@ -19,6 +19,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Presets;
 using UnityEngine;
@@ -73,6 +74,22 @@ namespace VisualPinball.Unity.Editor
 			return wasAdded;
 		}
 
+		public void AddAsset(Asset asset)
+		{
+			if (IsLocked) {
+				throw new InvalidOperationException($"Cannot add new asset because library {Name} is locked.");
+			}
+
+			_db.AddAsset(asset, this);
+			asset.Category = !_db.HasCategory(asset.Category.Name)
+				? _db.AddCategory(asset.Category.Name)
+				: _db.GetCategoryByName(asset.Category.Name);
+			asset.Library = this;
+			EditorUtility.SetDirty(asset);
+			AssetDatabase.SaveAssetIfDirty(asset);
+			SaveLibrary();
+		}
+
 		public void SaveAsset(Asset asset)
 		{
 			if (IsLocked) {
@@ -83,18 +100,77 @@ namespace VisualPinball.Unity.Editor
 
 		public IEnumerable<AssetResult> GetAssets(LibraryQuery q) => _db.GetAssets(q);
 
-		public void RemoveAsset(Asset asset)
+		/// <summary>
+		/// Physically deletes the asset from the library, including thumbnails.
+		/// </summary>
+		/// <param name="asset">Asset to delete</param>
+		/// <exception cref="InvalidOperationException"></exception>
+		public void DeleteAsset(Asset asset)
 		{
 			if (IsLocked) {
 				throw new InvalidOperationException($"Cannot delete asset because library {Name} is locked.");
 			}
 
-			RecordUndo("remove asset from library");
-			_db.RemoveAsset(asset);
+			RecordUndo("delete asset from library");
+			_db.DeleteAsset(asset);
 			SaveLibrary();
 		}
 
+		/// <summary>
+		/// Removes the asset from the database, but keeps the file and thumbs in place.
+		/// </summary>
+		/// <param name="asset">Asset to remove</param>
+		/// <exception cref="InvalidOperationException"></exception>
+		public void RemoveAsset(Asset asset)
+		{
+			if (IsLocked) {
+				throw new InvalidOperationException($"Cannot remove asset because library {Name} is locked.");
+			}
+			_db.RemoveAsset(asset);
+		}
+
+		public void MoveAsset(Asset asset, AssetLibrary destLibrary)
+		{
+			if (destLibrary == this) {
+				return;
+			}
+			var srcLibrary = asset.Library;
+
+			// move data asset along with thumbs
+			if (!_db.MoveAsset(asset, destLibrary)) {
+				return;
+			}
+
+			// move prefab and its refs
+			var prefabPath = AssetDatabase.GetAssetPath(asset.Object);
+			var allPaths = AssetDatabase.GetDependencies(prefabPath, true).Distinct().ToArray();
+			foreach (var path in allPaths) {
+				if (path.StartsWith(destLibrary.LibraryRoot)) {
+					Debug.LogWarning($"Not moving asset {path} because it is already in the destination library {destLibrary.LibraryRoot}.");
+					continue;
+				}
+
+				if (!path.StartsWith(srcLibrary.LibraryRoot)) {
+					Debug.LogWarning($"Not moving asset {path} because it is not in the source library {srcLibrary.LibraryRoot}.");
+					continue;
+				}
+
+				var newPath = path.Replace(srcLibrary.LibraryRoot, destLibrary.LibraryRoot);
+				var newDirectory = Path.GetDirectoryName(newPath);
+				if (newDirectory != null && !Directory.Exists(newDirectory)) {
+					Directory.CreateDirectory(newDirectory);
+					AssetDatabase.ImportAsset(newDirectory, ImportAssetOptions.ForceSynchronousImport);
+				}
+				Debug.Log($"Moving asset {path} to {newPath}");
+				var error = AssetDatabase.MoveAsset(path, newPath);
+				if (!string.IsNullOrEmpty(error)) {
+					Debug.LogError($"Could not move asset {path} to {newPath}: {error}");
+				}
+			}
+		}
+
 		public bool HasAsset(string guid) => _db.HasAsset(guid);
+		public bool HasAsset(Asset asset) => _db.HasAsset(asset.GUID);
 		public Asset GetAsset(string guid) => _db.GetAsset(guid);
 
 		#endregion
@@ -252,6 +328,5 @@ namespace VisualPinball.Unity.Editor
 		}
 
 		#endregion
-
 	}
 }

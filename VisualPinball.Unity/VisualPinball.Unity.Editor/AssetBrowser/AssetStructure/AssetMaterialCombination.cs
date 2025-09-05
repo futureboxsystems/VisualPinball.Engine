@@ -22,79 +22,194 @@ using UnityEngine;
 
 namespace VisualPinball.Unity.Editor
 {
+	/// <summary>
+	/// A material combination is an asset that gets one or more of its material slots overriden
+	/// by a <see cref="AssetMaterialOverride"/> (which is linked to a <see cref="AssetMaterialVariation"/>).
+	///
+	/// Among those overrides, the AssetMaterialVariations are unique, i.e. a material slot can only be
+	/// overridden once. The overrides aren't always complete, i.e. some material slots may not be overridden.
+	/// </summary>
 	public class AssetMaterialCombination
 	{
-		public string Name => string.Join(", ", _variations.Select(v => $"{v.Item2.Name} {v.Item1.Name}"));
+		#region Public Members
+
+		public readonly Asset Asset;
+		public readonly AssetMaterialVariationOverride[] Overrides;
+
+		public string DecalVariationNames =>
+			string.Join("|", Overrides.Where(o => o.Variation.IsDecal).Select(o => o.Override.VariationName).OrderBy(name => name));
+
+		public string DecalOverrideNames =>
+			string.Join("|", Overrides.Where(o => o.Variation.IsDecal).Select(o => o.Override.Name).OrderBy(name => name));
 
 		public string ThumbId => GenerateThumbID();
-		public string ThumbPath => $"{Asset.Library.ThumbnailRoot}/{ThumbId}.png";
+		public string ThumbPath => $"{Asset.Library.ThumbnailRoot}/{ThumbId}.webp";
 
-		public bool IsOriginal => _variations.Length == 0;
+		public bool IsOriginal => Overrides.Length == 0;
 
 		public bool HasThumbnail => File.Exists(ThumbPath);
 
-		public readonly Asset Asset;
-		private readonly (AssetMaterialVariation, AssetMaterialOverride)[] _variations;
+		public bool IsValidCombination {
+			get {
+				if (Asset.MaterialCombinationRules == null || Asset.MaterialCombinationRules.Count == 0) {
+					return true;
+				}
+
+				var varsWithDefaults = VariationsWithDefaults;
+				foreach (var rule in Asset.MaterialCombinationRules) {
+					switch (rule.Type) {
+						case AssetMaterialCombinationType.MustAllBeEqual: {
+							var allEqual = varsWithDefaults
+								.Where(v => rule.Targets.Any(t => t == v.Target))
+								.GroupBy(v => v.OverrideName)
+								.Count() == 1;
+							if (!allEqual) {
+								return false;
+							}
+							break;
+						}
+
+						case AssetMaterialCombinationType.MustAllBeDifferent: {
+							var allDifferent = varsWithDefaults
+								.Where(v => rule.Targets.Any(t => t == v.Target))
+								.GroupBy(v => v.OverrideName)
+								.Count() == varsWithDefaults.Length;
+							if (!allDifferent) {
+								return false;
+							}
+							break;
+						}
+					}
+				}
+				return true;
+			}
+		}
+
+		#endregion
+
+		#region Private Members
 
 		private string _thumbId;
+
+		public string Name => string.Join(", ",
+			(Overrides.Any(v => v.IsDecal)
+				? Overrides.Where(v => v.IsDecal)
+				: Overrides
+			).Select(v => $"{v.Override.Name} {v.Variation.Name}")
+		);
+
+		internal VariationWithDefault[] VariationsWithDefaults =>
+			Overrides
+				.Select(v => new VariationWithDefault(v.Variation.Target, v.Variation.Name, v.Override.Name))
+				.Concat(Asset.MaterialDefaults
+					.Where(md => Overrides.All(v => v.Variation.Target != md.Target))
+					.Select(md => new VariationWithDefault(md.Target, md.VariationName, md.OverrideName)))
+				.ToArray();
+
+		#endregion
+
+		#region Constructors
 
 		public AssetMaterialCombination(Asset asset)
 		{
 			Asset = asset;
-			_variations = Array.Empty<(AssetMaterialVariation, AssetMaterialOverride)>();
+			Overrides = Array.Empty<AssetMaterialVariationOverride>();
+		}
+
+		internal AssetMaterialCombination(Asset asset, IReadOnlyList<Counter> counters, IReadOnlyList<AssetMaterialVariation> variations)
+		{
+			Asset = asset;
+			Overrides = new AssetMaterialVariationOverride[counters.Count];
+			for (var i = 0; i < counters.Count; i++) {
+				var overrideIndex = counters[i].Value;
+				Overrides[i] = new AssetMaterialVariationOverride(
+					overrideIndex == 0 ? null : variations[i],
+					overrideIndex == 0 ? null : variations[i].Overrides[overrideIndex - 1]
+				);
+			}
+			Overrides = Overrides.Where(mv => mv.Variation != null).ToArray();
+		}
+
+		#endregion
+
+		#region Matching
+
+		/// <summary>
+		/// Returns whether the overrides of the given <see cref="AssetMaterialCombination"/> match the overridden targets
+		/// of this combination. Name is ignored. If the given combination is null, then this combination is considered to
+		/// match if it has no overrides.
+		/// </summary>
+		/// <param name="materialCombination">Combination to compare with</param>
+		/// <returns>True of overrides of combination have the same targets, false otherwise.</returns>
+		public bool EqualsOverrides(AssetMaterialCombination materialCombination)
+		{
+			if (materialCombination == null && Overrides.Length == 0) {
+				return true;
+			}
+			if (materialCombination == null || Overrides.Length != materialCombination.Overrides.Length) {
+				return false;
+			}
+
+			return Overrides
+				.Select(vo => materialCombination.Overrides
+					.FirstOrDefault(o => o.Variation.Target == vo.Variation.Target))
+				.All(matchingOverride => matchingOverride != null);
+		}
+
+		private bool Matches(AssetMaterialCombination combination)
+		{
+			if (combination == null || combination.Overrides.Length == 0) {
+				return false;
+			}
+			return combination.Overrides.All(ovr => Overrides.Contains(ovr));
 		}
 
 		/// <summary>
-		/// So this is basically a counter where the positions are the variations, and the figures are the overrides.
-		/// When the last override of the last variation has counted up, we're done.
+		/// Checks whether a given <see cref="AssetMaterialDefault"/> matches this combination, i.e.
+		/// if there is an override for the target of the default, and if that override's name matches.
+		///
+		/// If there is no override for the target, then the default is considered to match.
 		/// </summary>
-		/// <param name="asset"></param>
+		/// <param name="md"></param>
 		/// <returns></returns>
-		public static IEnumerable<AssetMaterialCombination> GetCombinations(Asset asset)
+		public bool Matches(AssetMaterialDefault md)
 		{
-			var variations = new List<AssetMaterialVariation>();
-			foreach (var childAsset in asset.GetNestedAssets()) {
-				variations.AddRange(childAsset.MaterialVariations.Select(mv => mv.Nested));
+			if (md == null || md.Target == null) {
+				return false;
 			}
-
-			variations.AddRange(asset.MaterialVariations);
-			var counters = new Counter[variations.Count];
-			Counter nextCounter = null;
-			for (var i = variations.Count - 1; i >= 0; i--) {
-				counters[i] = new Counter(variations[i].Overrides.Count, nextCounter);
-				nextCounter = counters[i];
+			var o = Overrides.FirstOrDefault(o => o.Variation.Target == md.Target);
+			if (o == null) {
+				return true;
 			}
-
-			var combinations = new List<AssetMaterialCombination>();
-			if (counters.Length == 0) {
-				combinations.Add(new AssetMaterialCombination(asset));
-				return combinations;
-			}
-			do {
-				combinations.Add(new AssetMaterialCombination(asset, counters, variations));
-			} while (counters[0].Increase());
-
-			return combinations;
+			return o.Override.Name == md.OverrideName;
 		}
 
-		public void ApplyObjectPos(GameObject go)
+		/// <summary>
+		/// Same as <see cref="Matches(AssetMaterialDefault)"/>, but for an <see cref="AssetMaterialVariationOverride"/>.
+		/// </summary>
+		/// <param name="vo"></param>
+		/// <returns></returns>
+		public bool Matches(AssetMaterialVariationOverride vo)
 		{
-			var pos = go.transform.position;
-			pos.y = Asset.ThumbCameraHeight;
-			go.transform.position = pos;
+			if (vo == null || vo.Variation.Target == null) {
+				return false;
+			}
+			var o = Overrides.FirstOrDefault(o => o.Variation.Target == vo.Variation.Target);
+			if (o == null) {
+				return false;
+			}
+			return o.Override.Name == vo.Override.Name;
 		}
 
-		public void ApplyMaterial(GameObject go)
+		#endregion
+
+		#region Thumbnails
+
+		public void MoveThumb(AssetLibrary destLibrary)
 		{
-			foreach (var (materialVariation, materialOverride) in _variations) {
-				var obj = materialVariation.Match(go);
-				if (obj == null) {
-					Debug.LogError("Unable to determine which to object the material needs to be applied to.");
-					return;
-				}
-				var materials = obj.gameObject.GetComponent<MeshRenderer>().sharedMaterials;
-				materials[materialVariation.Slot] = materialOverride.Material;
-				obj.gameObject.GetComponent<MeshRenderer>().sharedMaterials = materials;
+			if (File.Exists(ThumbPath)) {
+				var destPath = $"{destLibrary.ThumbnailRoot}/{ThumbId}.webp";
+				File.Move(ThumbPath, destPath);
 			}
 		}
 
@@ -108,14 +223,14 @@ namespace VisualPinball.Unity.Editor
 				return _thumbId;
 			}
 
-			if (_variations.Length == 0) {
+			if (Overrides.Length == 0) {
 				_thumbId = Asset.GUID;
 
 			} else {
 				const int byteCount = 16;
 				var guid1 = new Guid(Asset.GUID);
-				foreach (var (v, o) in _variations) {
-					var guid2 = new Guid(o.Id);
+				foreach (var v in Overrides) {
+					var guid2 = new Guid(v.Override.Id);
 					var destByte = new byte[byteCount];
 					var guid1Byte = guid1.ToByteArray();
 					var guid2Byte = guid2.ToByteArray();
@@ -129,21 +244,53 @@ namespace VisualPinball.Unity.Editor
 			return _thumbId;
 		}
 
-		private AssetMaterialCombination(Asset asset, IReadOnlyList<Counter> counters, IReadOnlyList<AssetMaterialVariation> variations)
+		#endregion
+
+		#region Application
+
+		public void ApplyObjectPos(GameObject go)
 		{
-			Asset = asset;
-			_variations = new (AssetMaterialVariation, AssetMaterialOverride)[counters.Count];
-			for (var i = 0; i < counters.Count; i++) {
-				var overrideIndex = counters[i].Value;
-				_variations[i] = (
-					overrideIndex == 0 ? null : variations[i],
-					overrideIndex == 0 ? null : variations[i].Overrides[overrideIndex - 1]
-				);
+			if (Asset.ThumbCameraPos == default) {
+				Asset.ThumbCameraPos = new Vector3(0, Asset.ThumbCameraHeight, 0);
 			}
-			_variations = _variations.Where(mv => mv.Item1 != null).ToArray();
+			go.transform.position = Asset.ThumbCameraPos;
+			go.transform.rotation = Quaternion.Euler(Asset.ThumbCameraRot);
 		}
 
-		private class Counter
+		public void ApplyMaterial(GameObject go)
+		{
+			foreach (var v in Overrides) {
+				var obj = v.Variation.Match(go);
+				if (obj == null) {
+					Debug.LogError("Unable to determine which to object the material needs to be applied to.");
+					return;
+				}
+
+				if (!obj.activeSelf) {
+					obj.SetActive(true);
+				}
+				var materials = obj.gameObject.GetComponent<MeshRenderer>().sharedMaterials;
+				materials[v.Variation.Target.Slot] = v.Override.Material;
+				obj.gameObject.GetComponent<MeshRenderer>().sharedMaterials = materials;
+			}
+		}
+
+		#endregion
+
+		#region Combining
+
+		public AssetMaterialCombination GetValidCombination()
+		{
+			if (IsValidCombination) {
+				return this;
+			}
+
+			return Asset.GetCombinations(true, true)
+				.Where(c => c.Matches(this))
+				.FirstOrDefault(c => c.IsValidCombination);
+		}
+
+		internal class Counter
 		{
 			public int Value;
 			private readonly int _size;
@@ -169,6 +316,26 @@ namespace VisualPinball.Unity.Editor
 			}
 		}
 
-		public override string ToString() => Name;
+		#endregion
+
+		#region Helpers / Debug
+
+		public override string ToString() => $"{string.Join(" | ", Overrides.Select(v => $"{v.Override.Name} {v.Variation.Name} ({v.Override.Material.name})"))}";
+
+		internal readonly struct VariationWithDefault
+		{
+			public readonly AssetMaterialTarget Target;
+			public readonly string VariationName;
+			public readonly string OverrideName;
+
+			public VariationWithDefault(AssetMaterialTarget target, string variationName, string overrideName)
+			{
+				Target = target;
+				VariationName = variationName;
+				OverrideName = overrideName;
+			}
+		}
+
+		#endregion
 	}
 }

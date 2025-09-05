@@ -120,6 +120,7 @@ namespace VisualPinball.Unity.Editor
 			asset.Tags = new List<AssetTag>();
 			asset.Links = new List<AssetLink>();
 			asset.MaterialVariations = new List<AssetMaterialVariation>();
+			asset.DecalVariations = new List<AssetMaterialVariation>();
 			asset.AddedAt = DateTime.Now;
 
 			var assetMetaPath = AssetMetaPath(asset, lib);
@@ -133,11 +134,34 @@ namespace VisualPinball.Unity.Editor
 			return true;
 		}
 
-		public void RemoveAsset(Asset asset)
+		public bool AddAsset(Asset asset, AssetLibrary lib)
+		{
+			if (Assets.Contains(asset.Object)) {
+				return false;
+			}
+			var assetMetaPath = AssetMetaPath(asset, lib);
+			var assetMetaFolder = Path.GetDirectoryName(assetMetaPath);
+			if (!Directory.Exists(assetMetaFolder)) {
+				Directory.CreateDirectory(assetMetaFolder!);
+			}
+			Assets.Add(asset);
+
+			return true;
+		}
+
+		public bool RemoveAsset(Asset asset)
 		{
 			if (Assets.Contains(asset)) {
 				Assets.Remove(asset);
-				foreach (var materialCombination in AssetMaterialCombination.GetCombinations(asset)) { // includes the original
+				return true;
+			}
+			return false;
+		}
+
+		public void DeleteAsset(Asset asset)
+		{
+			if (RemoveAsset(asset)) {
+				foreach (var materialCombination in asset.GetCombinations(true, true)) { // includes the original
 					if (File.Exists(materialCombination.ThumbPath)) {
 						File.Delete(materialCombination.ThumbPath);
 					}
@@ -145,6 +169,49 @@ namespace VisualPinball.Unity.Editor
 				File.Delete(AssetMetaPath(asset, asset.Library));
 				File.Delete(AssetMetaPath(asset, asset.Library) + ".meta");
 			}
+		}
+
+		public bool MoveAsset(Asset asset, AssetLibrary destLibrary)
+		{
+			if (Assets.Contains(asset)) {
+
+				// first, move material combination thumbs before we switch the reference to the library.
+				foreach (var materialCombination in asset.GetCombinations(true, true)) { // includes the original
+					materialCombination.MoveThumb(destLibrary);
+				}
+				// move the .asset file to the new library.
+				var assetSrc = AssetMetaPath(asset, asset.Library);
+				var assetDest = AssetMetaPath(asset, destLibrary);
+
+				Debug.Log($"Moving database asset {assetSrc} to {assetDest}");
+				var error = AssetDatabase.MoveAsset(assetSrc, assetDest);
+				if (!string.IsNullOrEmpty(error)) {
+					Debug.LogError($"Could not move asset {assetSrc} to {assetDest}: {error}");
+				}
+
+				// move the reference in the database.
+				destLibrary.AddAsset(asset);
+
+				// finally, remove the reference from the old library.
+				Assets.Remove(asset);
+				return true;
+			}
+
+			if (destLibrary.HasAsset(asset.GUID)) {
+				if (asset.Library != destLibrary) {
+					Debug.Log($"Updated asset's library reference from {asset.Library.Name} to {destLibrary.Name}.");
+					asset.Library = destLibrary;
+					EditorUtility.SetDirty(asset);
+					AssetDatabase.SaveAssetIfDirty(asset);
+
+				} else {
+					Debug.LogWarning($"Asset {asset.Name} ({asset.GUID}) already exists in {destLibrary.Name}. Cannot move.");
+				}
+				return false;
+			}
+
+			Debug.LogWarning($"Database does not contain asset {asset.Name} ({asset.GUID}). Cannot move to {destLibrary.Name}.");
+			return false;
 		}
 
 		public bool HasAsset(string guid) => Assets.Contains(guid);
@@ -171,9 +238,13 @@ namespace VisualPinball.Unity.Editor
 			category.Name = newName;
 		}
 
-		public AssetCategory GetCategory(string id) => Categories[id];
+		public AssetCategory GetCategory(string id) => Categories.ContainsKey(id) ? Categories[id] : null;
+
+		public AssetCategory GetCategoryByName(string name) => Categories.Values.First(c=> c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
 		public IEnumerable<AssetCategory> GetCategories() => Categories.Values.OrderBy(c => c.Name).ToList();
+
+		public bool HasCategory(string name) => Categories.Contains(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
 		public void SetCategory(Asset asset, AssetCategory category)
 		{
@@ -286,6 +357,11 @@ namespace VisualPinball.Unity.Editor
 	{
 		public void Add(AssetCategory category) => this[category.Id] = category;
 		public bool Remove(AssetCategory category) => Remove(category.Id);
+
+		public bool Contains(Func<AssetCategory, bool> predicate)
+		{
+			return Values.Any(predicate);
+		}
 	}
 
 	[Serializable]

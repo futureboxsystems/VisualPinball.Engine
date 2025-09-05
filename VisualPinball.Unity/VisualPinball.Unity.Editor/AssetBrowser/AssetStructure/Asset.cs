@@ -18,10 +18,14 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using NetVips;
 using UnityEditor;
 using UnityEditor.Presets;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
 
 namespace VisualPinball.Unity.Editor
@@ -60,8 +64,21 @@ namespace VisualPinball.Unity.Editor
 		public List<AssetLink> Links;
 
 		[SerializeField]
-		[NonReorderable] // see https://answers.unity.com/questions/1828499/nested-class-lists-inspector-overlapping-bug.html
+		public AssetMaterialVariationGroupConfig GroupBy;
+
+		[SerializeField]
+		// [NonReorderable] // see https://answers.unity.com/questions/1828499/nested-class-lists-inspector-overlapping-bug.html
 		public List<AssetMaterialVariation> MaterialVariations;
+
+		[SerializeField]
+		// [NonReorderable] // see https://answers.unity.com/questions/1828499/nested-class-lists-inspector-overlapping-bug.html
+		public List<AssetMaterialVariation> DecalVariations;
+
+		[SerializeField]
+		public List<AssetMaterialDefault> MaterialDefaults;
+
+		[SerializeField]
+		public List<AssetMaterialCombinationRule> MaterialCombinationRules;
 
 		[SerializeField]
 		public string EnvironmentGameObjectName;
@@ -71,6 +88,8 @@ namespace VisualPinball.Unity.Editor
 
 		[SerializeField]
 		public float ThumbCameraHeight;
+		public Vector3 ThumbCameraPos;
+		public Vector3 ThumbCameraRot;
 
 		[SerializeField]
 		public bool UnpackPrefab;
@@ -80,6 +99,12 @@ namespace VisualPinball.Unity.Editor
 
 		[NonSerialized]
 		private AssetCategory _category;
+
+		public AssetLibrary[] Libraries =>
+			AssetDatabase.FindAssets("t:AssetLibrary")
+				.Select(guid => AssetDatabase.LoadAssetAtPath<AssetLibrary>(AssetDatabase.GUIDToAssetPath(guid)))
+				.Where(lib => lib != null && lib.HasAsset(GUID))
+				.ToArray();
 
 		public DateTime AddedAt {
 			get => string.IsNullOrEmpty(_addedAt) ? DateTime.Now : Convert.ToDateTime(_addedAt);
@@ -94,6 +119,9 @@ namespace VisualPinball.Unity.Editor
 				throw new Exception($"Could not get GUID from {Object.name}");
 			}
 		}
+
+		public string ThumbnailPath => Path.GetFullPath($"{Library.ThumbnailRoot}/{GUID}.webp");
+		public bool HasThumbnail => File.Exists(ThumbnailPath);
 
 		public Asset SetCategory(LibraryDatabase lib)
 		{
@@ -171,5 +199,111 @@ namespace VisualPinball.Unity.Editor
 				}
 			}
 		}
+
+		public Texture2D LoadThumbTexture(string thumbnailPath)
+		{
+			var sw = Stopwatch.StartNew();
+
+			// Load the image using NetVips
+			var image = Image.NewFromBuffer(File.ReadAllBytes(thumbnailPath), access: Enums.Access.Sequential);
+
+			// only use rgb
+			if (image.Bands > 3) {
+				image = image.ExtractBand(0, 3); // Use only the first 3 channels
+			}
+
+			// Ensure format is 8-bit unsigned char
+			if (image.Format != Enums.BandFormat.Uchar) {
+				image = image.Cast(Enums.BandFormat.Uchar);
+			}
+
+			image = image.Flip(Enums.Direction.Vertical);
+
+			// Get raw pixel data in RGBA format
+			var raw = image.WriteToMemory();
+			var width = image.Width;
+			var height = image.Height;
+			image.Close();
+			image.Dispose();
+
+			// Create Texture2D
+			var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+			texture.LoadRawTextureData(raw);
+			texture.Apply();
+
+			Debug.Log($"Texture loaded in {sw.ElapsedMilliseconds}ms: {width}x{height}");
+			return texture;
+		}
+
+		/// <summary>
+		/// So this is basically a counter where the positions are the variations, and the figures are the overrides.
+		/// When the last override of the last variation has counted up, we're done.
+		/// </summary>
+		/// <param name="asset"></param>
+		/// <param name="materials"></param>
+		/// <param name="decals"></param>
+		/// <param name="onlyValid"></param>
+		/// <returns></returns>
+		public IEnumerable<AssetMaterialCombination> GetCombinations(bool materials, bool decals, bool onlyValid = true)
+		{
+			if (!materials && !decals) {
+				throw new ArgumentException("Either materials or decals must be true to get combinations.");
+			}
+
+			var variations = new List<AssetMaterialVariation>();
+
+			if (materials) {
+				foreach (var childAsset in GetNestedAssets()) {
+					variations.AddRange(childAsset.MaterialVariations.Select(mv => mv.AsNested()));
+				}
+				variations.AddRange(MaterialVariations);
+			}
+
+			if (decals && DecalVariations.Count > 0) {
+				//variations.AddRange(DecalVariations.Select(dv => dv.AsDecal()));
+				variations.AddRange(DecalVariations
+					.GroupBy(dv => dv.Target)
+					.Select(target => new AssetMaterialVariation {
+						Name = string.Join("|", target.Select(t => t.Name)),
+						Target = target.Key,
+						Overrides = target.SelectMany(dv => dv.Overrides.Select(o => o.WithVariationName(dv.Name))).ToList()
+					}.AsDecal())
+				);
+			}
+
+			var counters = new AssetMaterialCombination.Counter[variations.Count];
+			AssetMaterialCombination.Counter nextCounter = null;
+			for (var i = variations.Count - 1; i >= 0; i--) {
+				counters[i] = new AssetMaterialCombination.Counter(variations[i].Overrides.Count, nextCounter);
+				nextCounter = counters[i];
+			}
+
+			var combinations = new List<AssetMaterialCombination>();
+			if (counters.Length == 0) {
+				combinations.Add(new AssetMaterialCombination(this));
+				return combinations;
+			}
+			do {
+				var combination = new AssetMaterialCombination(this, counters, variations);
+				if (!onlyValid || combination.IsValidCombination) {
+					combinations.Add(combination);
+				}
+			} while (counters[0].Increase());
+
+			return combinations;
+		}
+
+		public IEnumerable<AssetMaterialCombination> CombineWith(AssetMaterialCombination materialCombination)
+		{
+			if (materialCombination == null) {
+				return GetCombinations(true, true)
+					.Where(x => x.Asset.MaterialDefaults.All(x.Matches));
+			}
+
+			return GetCombinations(true, true)
+				.Where(combination => combination.Overrides.Length > 0 && materialCombination.Overrides.All(combination.Matches));
+		}
+
+		public override string ToString() => Name;
 	}
 }

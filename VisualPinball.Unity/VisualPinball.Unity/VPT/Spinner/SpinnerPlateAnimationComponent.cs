@@ -14,16 +14,28 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+// ReSharper disable InconsistentNaming
+
 using Unity.Mathematics;
-using VisualPinball.Engine.VPT.Spinner;
+using UnityEngine;
 
 namespace VisualPinball.Unity
 {
-	public class SpinnerPlateAnimationComponent : AnimationComponent<SpinnerData, SpinnerComponent>, IRotatableAnimationComponent
+	public class SpinnerPlateAnimationComponent : AnimationComponent<float>
 	{
-		public void OnRotationUpdated(float angleRad)
+		public Vector3 RotationVector = Vector3.right;
+		private Quaternion _initialRotation;
+
+		private void Start()
 		{
-			transform.localRotation = quaternion.RotateX(-angleRad);
+			_initialRotation = transform.localRotation;
+		}
+
+		protected override void OnAnimationValueChanged(float value)
+		{
+			var axis = RotationVector.normalized;
+			var rotation = Quaternion.AngleAxis(math.degrees(value), axis);
+			transform.localRotation = _initialRotation * rotation;
 		}
 	}
 }

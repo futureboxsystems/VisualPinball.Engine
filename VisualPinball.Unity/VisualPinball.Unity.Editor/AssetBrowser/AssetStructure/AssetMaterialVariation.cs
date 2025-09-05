@@ -18,27 +18,48 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace VisualPinball.Unity.Editor
 {
+	/// <summary>
+	/// A material variation defines a target (object and material slot of the object) and a list of materials that can
+	/// be applied to that target.
+	///
+	/// Both the variation itself and the overrides can be named.
+	/// </summary>
 	[Serializable]
 	public class AssetMaterialVariation
 	{
 		public string Name;
-		[SerializeReference]
-		public Object Object;
-		public int Slot;
+		public AssetMaterialTarget Target;
 		public List<AssetMaterialOverride> Overrides;
-		
+
+		/// <summary>
+		/// If a variation is nested, that means it's part of another asset while looping through material combinations.
+		/// </summary>
 		[NonSerialized]
 		public bool IsNested;
+
+		[NonSerialized]
+		public bool IsDecal;
 		
-		public string GUID => AssetDatabase.TryGetGUIDAndLocalFileIdentifier(Object, out var guid, out long _) ? guid : null;
-		
-		public AssetMaterialVariation Nested { get { IsNested = true; return this; }}
+		public string GUID => AssetDatabase.TryGetGUIDAndLocalFileIdentifier(Target?.Object, out var guid, out long _) ? guid : null;
+
+		public AssetMaterialVariation AsNested()
+		{
+			IsNested = true;
+			return this;
+		}
+
+		public AssetMaterialVariation AsDecal()
+		{
+			IsDecal = true;
+			return this;
+		}
 
 		public GameObject Match(GameObject go)
 		{
@@ -47,10 +68,9 @@ namespace VisualPinball.Unity.Editor
 				return matchedGo;
 			}
 
-			return go.name == Object.name 
+			return go.name == Target.Object.name
 				? go 
-				: go!.transform.Find(Object.name)?.gameObject;
-
+				: go!.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.gameObject.name == Target.Object.name)?.gameObject;
 		}
 
 		/// <summary>
@@ -68,7 +88,7 @@ namespace VisualPinball.Unity.Editor
 			if (objectGuid == null) {
 				return null;
 			}
-			foreach (var child in go.GetComponentsInChildren<Transform>()) {
+			foreach (var child in go.GetComponentsInChildren<Transform>(true)) {
 				// get reference to prefab
 				var prefab = PrefabUtility.GetCorrespondingObjectFromOriginalSource(child.gameObject);
 				if (prefab == null) {
@@ -83,6 +103,27 @@ namespace VisualPinball.Unity.Editor
 			}
 			return null;
 		}
+
+		public override bool Equals(object obj)
+		{
+			if (obj is AssetMaterialVariation other) {
+				return Target == other.Target && Overrides.SequenceEqual(other.Overrides);
+			}
+			return false;
+		}
+
+		protected bool Equals(AssetMaterialVariation other)
+		{
+			return Name == other.Name && Equals(Overrides, other.Overrides);
+		}
+
+		public override int GetHashCode()
+		{
+			return HashCode.Combine(Name, Overrides);
+		}
+
+		public override string ToString()
+			=> $"{Name} - {string.Join(" | ", Overrides.Select(o => o.Name))} ({Target.Object.name}@{Target.Slot})";
 	}
 }
 #endif

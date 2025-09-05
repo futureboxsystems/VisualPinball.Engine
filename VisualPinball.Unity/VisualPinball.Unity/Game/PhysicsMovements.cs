@@ -17,15 +17,12 @@
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Mathematics;
-using UnityEngine;
 
 namespace VisualPinball.Unity
 {
 	internal class PhysicsMovements
 	{
-		private readonly BumperTransform _bumperTransform = new();
-
-		internal void ApplyBallMovement(ref PhysicsState state, Dictionary<int, Transform> transforms)
+		internal void ApplyBallMovement(ref PhysicsState state, Dictionary<int, BallComponent> ballComponents)
 		{
 			using var enumerator = state.Balls.GetEnumerator();
 			while (enumerator.MoveNext()) {
@@ -33,97 +30,107 @@ namespace VisualPinball.Unity
 				if (ball.IsFrozen) {
 					continue;
 				}
-				BallMovementPhysics.Move(ball, transforms[ball.Id]);
+				ballComponents[ball.Id].Move(ball);
 			}
 		}
 
-		internal void ApplyFlipperMovement(ref NativeParallelHashMap<int, FlipperState> flipperStates, Dictionary<int, Transform> transforms)
+		internal void ApplyFlipperMovement(ref NativeParallelHashMap<int, FlipperState> flipperStates,
+			Dictionary<int, IAnimationValueEmitter<float>> floatAnimatedComponent)
 		{
 			using var enumerator = flipperStates.GetEnumerator();
 			while (enumerator.MoveNext()) {
 				ref var flipperState = ref enumerator.Current.Value;
-				var transform = transforms[enumerator.Current.Key];
-
-				transform.SetLocalYRotation(flipperState.Movement.Angle);
+				var emitter = floatAnimatedComponent[enumerator.Current.Key];
+				emitter.UpdateAnimationValue(flipperState.Movement.Angle);
 			}
 		}
 
-		internal void ApplyBumperMovement(ref NativeParallelHashMap<int, BumperState> bumperStates, Dictionary<int, Transform> transforms)
-		{
+		internal void ApplyBumperMovement(
+			ref NativeParallelHashMap<int, BumperState> bumperStates,
+			Dictionary<int, IAnimationValueEmitter<float>> floatAnimatedComponent,
+			Dictionary<int, IAnimationValueEmitter<float2>> float2AnimatedComponent
+		) {
 			using var enumerator = bumperStates.GetEnumerator();
 			while (enumerator.MoveNext()) {
 				ref var bumperState = ref enumerator.Current.Value;
-				if (bumperState.SkirtItemId != 0) {
-					_bumperTransform.UpdateSkirt(in bumperState.SkirtAnimation, transforms[bumperState.SkirtItemId]);
-				}
+
 				if (bumperState.RingItemId != 0) {
-					_bumperTransform.UpdateRing(bumperState.RingItemId, in bumperState.RingAnimation, transforms[bumperState.RingItemId]);
+					var ringEmitter = floatAnimatedComponent[enumerator.Current.Key];
+					ringEmitter.UpdateAnimationValue(bumperState.RingAnimation.Offset);
+				}
+
+				if (bumperState.SkirtItemId != 0) {
+					var skirtEmitter = float2AnimatedComponent[enumerator.Current.Key];
+					skirtEmitter.UpdateAnimationValue(bumperState.SkirtAnimation.Rotation);
 				}
 			}
 		}
 
-		internal void ApplyDropTargetMovement(ref NativeParallelHashMap<int, DropTargetState> dropTargetStates, Dictionary<int, Transform> transforms)
+		internal void ApplyDropTargetMovement(ref NativeParallelHashMap<int, DropTargetState> dropTargetStates,
+			Dictionary<int, IAnimationValueEmitter<float>> floatAnimatedComponent)
 		{
 			using var enumerator = dropTargetStates.GetEnumerator();
 			while (enumerator.MoveNext()) {
 				ref var dropTargetState = ref enumerator.Current.Value;
-				var dropTargetTransform = transforms[dropTargetState.AnimatedItemId];
-				var localYDirection = dropTargetTransform.up;
+				if (dropTargetState.AnimatedItemId == 0) { // 0 means no animation component
+					continue;
+				}
 
-				// Compute the new position by moving along the local Y-axis
-				var newPosition = (Vector3)dropTargetState.Static.InitialPosition + localYDirection * Physics.ScaleToWorld(dropTargetState.Animation.ZOffset);
-
-				// Apply the new position
-				dropTargetTransform.localPosition = newPosition;
+				var emitter = floatAnimatedComponent[enumerator.Current.Key];
+				emitter.UpdateAnimationValue(dropTargetState.Animation.ZOffset);
 			}
 		}
 
-		internal void ApplyHitTargetMovement(ref NativeParallelHashMap<int, HitTargetState> hitTargetStates, Dictionary<int, Transform> transforms)
+		internal void ApplyHitTargetMovement(ref NativeParallelHashMap<int, HitTargetState> hitTargetStates,
+			Dictionary<int, IAnimationValueEmitter<float>> floatAnimatedComponent)
 		{
 			using var enumerator = hitTargetStates.GetEnumerator();
 			while (enumerator.MoveNext()) {
 				ref var hitTargetState = ref enumerator.Current.Value;
-				var transform = transforms[enumerator.Current.Key];
-				transform.SetLocalXRotation(math.radians(hitTargetState.Animation.XRotation + hitTargetState.Static.InitialXRotation));
+				if (hitTargetState.AnimatedItemId == 0) {
+					continue;
+				}
+
+				var emitter = floatAnimatedComponent[enumerator.Current.Key];
+				emitter.UpdateAnimationValue(hitTargetState.Animation.XRotation);
 			}
 		}
 
 		internal void ApplyGateMovement(ref NativeParallelHashMap<int, GateState> gateStates,
-			Dictionary<int, IRotatableAnimationComponent> rotatableComponent)
+			Dictionary<int, IAnimationValueEmitter<float>> floatAnimatedComponent)
 		{
 			using var enumerator = gateStates.GetEnumerator();
 			while (enumerator.MoveNext()) {
 				ref var gateState = ref enumerator.Current.Value;
-				var component = rotatableComponent[enumerator.Current.Key];
-				component.OnRotationUpdated(gateState.Movement.Angle);
+				var component = floatAnimatedComponent[enumerator.Current.Key];
+				component.UpdateAnimationValue(gateState.Movement.Angle);
 			}
 		}
 
 		internal void ApplyPlungerMovement(ref NativeParallelHashMap<int, PlungerState> plungerStates,
-			Dictionary<int, SkinnedMeshRenderer[]> skinnedMeshRenderers)
+			Dictionary<int, IAnimationValueEmitter<float>> floatAnimatedComponent)
 		{
 			using var enumerator = plungerStates.GetEnumerator();
 			while (enumerator.MoveNext()) {
 				ref var plungerState = ref enumerator.Current.Value;
-				foreach (var skinnedMeshRenderer in skinnedMeshRenderers[enumerator.Current.Key]) {
-					skinnedMeshRenderer.SetBlendShapeWeight(0, plungerState.Animation.Position);
-				}
+				var component = floatAnimatedComponent[enumerator.Current.Key];
+				component.UpdateAnimationValue(plungerState.Animation.Position);
 			}
 		}
 
 		internal void ApplySpinnerMovement(ref NativeParallelHashMap<int, SpinnerState> spinnerStates,
-			Dictionary<int, IRotatableAnimationComponent> rotatableComponent)
+			Dictionary<int, IAnimationValueEmitter<float>> floatAnimatedComponent)
 		{
 			using var enumerator = spinnerStates.GetEnumerator();
 			while (enumerator.MoveNext()) {
 				ref var spinnerState = ref enumerator.Current.Value;
-				var component = rotatableComponent[enumerator.Current.Key];
-				component.OnRotationUpdated(spinnerState.Movement.Angle);
+				var component = floatAnimatedComponent[enumerator.Current.Key];
+				component.UpdateAnimationValue(spinnerState.Movement.Angle);
 			}
 		}
 
 		internal void ApplyTriggerMovement(ref NativeParallelHashMap<int, TriggerState> triggerStates,
-			Dictionary<int, Transform> transforms)
+			Dictionary<int, IAnimationValueEmitter<float>> floatAnimatedComponent)
 		{
 			using var enumerator = triggerStates.GetEnumerator();
 			while (enumerator.MoveNext()) {
@@ -131,15 +138,8 @@ namespace VisualPinball.Unity
 				if (triggerState.AnimatedItemId == 0) {
 					continue;
 				}
-				var triggerTransform = transforms[triggerState.AnimatedItemId];
-
-				var localYDirection = triggerTransform.up;
-
-				// Compute the new position by moving along the local Y-axis
-				var newPosition = (Vector3)triggerState.Static.InitialPosition + localYDirection * Physics.ScaleToWorld(triggerState.Movement.HeightOffset);
-
-				// Apply the new position
-				triggerTransform.localPosition = newPosition;
+				var component = floatAnimatedComponent[enumerator.Current.Key];
+				component.UpdateAnimationValue(triggerState.Movement.HeightOffset);
 			}
 		}
 	}

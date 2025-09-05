@@ -87,7 +87,7 @@ namespace VisualPinball.Unity
 
 		#region Transforms
 
-		[NonSerialized] private readonly Dictionary<int, Transform> _transforms = new();
+		[NonSerialized] private readonly Dictionary<int, BallComponent> _ballComponents = new();
 
 		/// <summary>
 		/// Last transforms of kinematic items, so we can detect changes.
@@ -111,9 +111,10 @@ namespace VisualPinball.Unity
 		/// for items where the original physics engine doesn't.
 		/// </remarks>
 		[NonSerialized] private readonly LazyInit<NativeParallelHashMap<int, float4x4>> _nonTransformableColliderTransforms = new(() => new NativeParallelHashMap<int, float4x4>(0, Allocator.Persistent));
-		[NonSerialized] private readonly Dictionary<int, SkinnedMeshRenderer[]> _skinnedMeshRenderers = new();
 
-		[NonSerialized] private readonly Dictionary<int, IRotatableAnimationComponent> _rotatableComponent = new();
+		[NonSerialized] private readonly Dictionary<int, IAnimationValueEmitter<bool>> _boolAnimatedComponents = new();
+		[NonSerialized] private readonly Dictionary<int, IAnimationValueEmitter<float>> _floatAnimatedComponents = new();
+		[NonSerialized] private readonly Dictionary<int, IAnimationValueEmitter<float2>> _float2AnimatedComponents = new();
 
 		#endregion
 
@@ -167,7 +168,6 @@ namespace VisualPinball.Unity
 		{
 			var go = item.gameObject;
 			var itemId = go.GetInstanceID();
-			_transforms.TryAdd(itemId, go.transform);
 
 			// states
 			switch (item) {
@@ -175,6 +175,7 @@ namespace VisualPinball.Unity
 					if (!_ballStates.Ref.ContainsKey(itemId)) {
 						_ballStates.Ref[itemId] = c.CreateState();
 					}
+					_ballComponents.TryAdd(itemId, c);
 					break;
 				case BumperComponent c: _bumperStates.Ref[itemId] = c.CreateState(); break;
 				case FlipperComponent c:
@@ -186,7 +187,6 @@ namespace VisualPinball.Unity
 				case KickerComponent c: _kickerStates.Ref[itemId] = c.CreateState(); break;
 				case PlungerComponent c:
 					_plungerStates.Ref[itemId] = c.CreateState();
-					_skinnedMeshRenderers[itemId] = c.GetComponentsInChildren<SkinnedMeshRenderer>();
 					break;
 				case SpinnerComponent c: _spinnerStates.Ref[itemId] = c.CreateState(); break;
 				case SurfaceComponent c: _surfaceStates.Ref[itemId] = c.CreateState(); break;
@@ -194,18 +194,24 @@ namespace VisualPinball.Unity
 			}
 
 			// animations
-			if (item is IRotatableAnimationComponent rotatableComponent) {
-				_rotatableComponent.TryAdd(itemId, rotatableComponent);
+			if (item is IAnimationValueEmitter<bool> boolAnimatedComponent) {
+				_boolAnimatedComponents.TryAdd(itemId, boolAnimatedComponent);
+			}
+			if (item is IAnimationValueEmitter<float> floatAnimatedComponent) {
+				_floatAnimatedComponents.TryAdd(itemId, floatAnimatedComponent);
+			}
+			if (item is IAnimationValueEmitter<float2> float2AnimatedComponent) {
+				_float2AnimatedComponents.TryAdd(itemId, float2AnimatedComponent);
 			}
 		}
 
-		internal Transform UnregisterBall(int ballId)
+		internal BallComponent UnregisterBall(int ballId)
 		{
-			var t = _transforms[ballId];
-			_transforms.Remove(ballId);
+			var b = _ballComponents[ballId];
+			_ballComponents.Remove(ballId);
 			_ballStates.Ref.Remove(ballId);
 			_insideOfs.SetOutsideOfAll(ballId);
-			return t;
+			return b;
 		}
 
 		internal bool IsColliderEnabled(int itemId) => !_disabledCollisionItems.Ref.Contains(itemId);
@@ -223,7 +229,7 @@ namespace VisualPinball.Unity
 			}
 		}
 
-		internal Transform GetTransform(int itemId) => _transforms[itemId];
+		public BallComponent GetBall(int itemId) => _ballComponents[itemId];
 
 		#endregion
 
@@ -397,15 +403,15 @@ namespace VisualPinball.Unity
 
 			#region Movements
 
-			_physicsMovements.ApplyBallMovement(ref state, _transforms);
-			_physicsMovements.ApplyFlipperMovement(ref _flipperStates.Ref, _transforms);
-			_physicsMovements.ApplyBumperMovement(ref _bumperStates.Ref, _transforms);
-			_physicsMovements.ApplyDropTargetMovement(ref _dropTargetStates.Ref, _transforms);
-			_physicsMovements.ApplyHitTargetMovement(ref _hitTargetStates.Ref, _transforms);
-			_physicsMovements.ApplyGateMovement(ref _gateStates.Ref, _rotatableComponent);
-			_physicsMovements.ApplyPlungerMovement(ref _plungerStates.Ref, _skinnedMeshRenderers);
-			_physicsMovements.ApplySpinnerMovement(ref _spinnerStates.Ref, _rotatableComponent);
-			_physicsMovements.ApplyTriggerMovement(ref _triggerStates.Ref, _transforms);
+			_physicsMovements.ApplyBallMovement(ref state, _ballComponents);
+			_physicsMovements.ApplyFlipperMovement(ref _flipperStates.Ref, _floatAnimatedComponents);
+			_physicsMovements.ApplyBumperMovement(ref _bumperStates.Ref, _floatAnimatedComponents, _float2AnimatedComponents);
+			_physicsMovements.ApplyDropTargetMovement(ref _dropTargetStates.Ref, _floatAnimatedComponents);
+			_physicsMovements.ApplyHitTargetMovement(ref _hitTargetStates.Ref, _floatAnimatedComponents);
+			_physicsMovements.ApplyGateMovement(ref _gateStates.Ref, _floatAnimatedComponents);
+			_physicsMovements.ApplyPlungerMovement(ref _plungerStates.Ref, _floatAnimatedComponents);
+			_physicsMovements.ApplySpinnerMovement(ref _spinnerStates.Ref, _floatAnimatedComponents);
+			_physicsMovements.ApplyTriggerMovement(ref _triggerStates.Ref, _floatAnimatedComponents);
 
 			#endregion
 		}

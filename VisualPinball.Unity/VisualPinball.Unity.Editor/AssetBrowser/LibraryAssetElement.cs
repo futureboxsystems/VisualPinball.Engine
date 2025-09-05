@@ -27,6 +27,8 @@ namespace VisualPinball.Unity.Editor
 	{
 		public AssetResult Result;
 
+		public const float RadiusRatio = 0.1f;
+
 		private enum DragState
 		{
 			AtRest,
@@ -52,6 +54,20 @@ namespace VisualPinball.Unity.Editor
 			if (evt.clickCount == 2) {
 				EditorGUIUtility.PingObject(Result.Asset.Object);
 			}
+		}
+
+		public void SetSize(int size)
+		{
+			var img = this.Q<VisualElement>("thumbnail-mask");
+			img.style.width = size;
+			img.style.height = size;
+			img.style.borderBottomLeftRadius = size * RadiusRatio;
+			img.style.borderBottomRightRadius = size * RadiusRatio;
+			img.style.borderTopLeftRadius = size * RadiusRatio;
+			img.style.borderTopRightRadius = size * RadiusRatio;
+
+			var label = this.Q<VisualElement>("label");
+			label.style.maxWidth = size;
 		}
 
 		public void RegisterDrag(IDragHandler handler) => _dragHandler = handler;

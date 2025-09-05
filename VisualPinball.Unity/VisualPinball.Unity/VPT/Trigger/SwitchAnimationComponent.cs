@@ -26,12 +26,11 @@ using UnityEngine;
 using VisualPinball.Engine.VPT.Trigger;
 using Logger = NLog.Logger;
 
-
 namespace VisualPinball.Unity
 {
 	//[PackAs("SwitchAnimation")]
 	[AddComponentMenu("Pinball/Animation/Switch Animation")]
-	public class SwitchAnimationComponent : AnimationComponent<TriggerData, TriggerComponent>//, IPackable
+	public class SwitchAnimationComponent : AnimationComponentLegacy<TriggerData, TriggerComponent>//, IPackable
 	{
 		private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
@@ -107,13 +106,16 @@ namespace VisualPinball.Unity
 				return;
 			}
 
-			var ballTransform = _physicsEngine.GetTransform(_ballId);
+			var ballComponent = _physicsEngine.GetBall(_ballId);
+			var ballTransform = ballComponent.transform;
 			var ballLocalToWorld = (float4x4)ballTransform.localToWorldMatrix;
 			var transformWithinParent = ballLocalToWorld.GetLocalToPlayfieldMatrixInVpx(_triggerComp.transform.worldToLocalMatrix);
 			var localVpxPos = transformWithinParent.MultiplyPoint(ballTransform.position);
 
 			var yPos = ForwardsAnimationCurve.Evaluate(math.unlerp(_yEnter, _yExit, localVpxPos.y)); // yPos is between 0 and 1, depending on where localVpxPos.y is
-			_currentAngle = math.clamp(math.lerp(_startAngle, EndAngle, yPos), _startAngle, EndAngle);
+			var clampFrom = math.min(_startAngle, EndAngle);
+			var clampTo = math.max(_startAngle, EndAngle);
+			_currentAngle = math.clamp(math.lerp(_startAngle, EndAngle, yPos), clampFrom, clampTo);
 
 			transform.SetLocalXRotation(math.radians(_currentAngle));
 		}
@@ -214,8 +216,8 @@ namespace VisualPinball.Unity
 			for (var i = 0; i < 4; i++) {
 				Handles2.DrawArrow(entryRect[i], exitRect[i], 3, 10);
 			}
-			Handles.DrawAAPolyLine(5, entryRect);
-			Handles.DrawAAPolyLine(5, exitRect);
+			Handles.DrawAAPolyLine(10, entryRect);
+			Handles.DrawAAPolyLine(10, exitRect);
 		}
 #endif
 	}

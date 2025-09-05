@@ -23,7 +23,7 @@ using VisualPinball.Engine.VPT;
 namespace VisualPinball.Unity.Editor
 {
 	public class AnimationInspector<TData, TMainComponent, TMovementComponent> : ItemInspector
-		where TMovementComponent : AnimationComponent<TData, TMainComponent>
+		where TMovementComponent : AnimationComponentLegacy<TData, TMainComponent>
 		where TData : ItemData
 		where TMainComponent : MainRenderableComponent<TData>
 	{
@@ -51,7 +51,7 @@ namespace VisualPinball.Unity.Editor
 
 		private static void NoDataError()
 		{
-			EditorGUILayout.HelpBox($"Cannot find main component!\n\nYou must have a {typeof(TMainComponent).Name} component on either this GameObject, its parent or grand parent.", MessageType.Error);
+			EditorGUILayout.HelpBox($"Cannot find main component!\n\nYou must have a {typeof(TMainComponent).Name} component on either this GameObject or one of its parents.", MessageType.Error);
 		}
 	}
 }

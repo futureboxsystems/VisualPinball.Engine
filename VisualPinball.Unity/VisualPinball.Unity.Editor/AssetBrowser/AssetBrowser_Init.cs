@@ -15,7 +15,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Collections.Generic;
-using System.IO;
 using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
@@ -42,8 +41,11 @@ namespace VisualPinball.Unity.Editor
 		private Slider _sizeSlider;
 
 		private VisualTreeAsset _assetTree;
+		private StyleSheet _assetStyle;
 
 		private readonly Dictionary<string, Texture2D> _thumbCache = new();
+
+		private const string ClassDrag = "library-element--dragover";
 
 		public string DragErrorLeft {
 			get => _dragErrorContainerLeft.ClassListContains("hidden") ? null : _dragErrorLabelLeft.text;
@@ -84,6 +86,7 @@ namespace VisualPinball.Unity.Editor
 			var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Packages/org.visualpinball.engine.unity/VisualPinball.Unity/VisualPinball.Unity.Editor/AssetBrowser/AssetBrowser.uxml");
 			visualTree.CloneTree(rootVisualElement);
 			_assetTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Packages/org.visualpinball.engine.unity/VisualPinball.Unity/VisualPinball.Unity.Editor/AssetBrowser/LibraryAssetElement.uxml");
+			_assetStyle = AssetDatabase.LoadAssetAtPath<StyleSheet>("Packages/org.visualpinball.engine.unity/VisualPinball.Unity/VisualPinball.Unity.Editor/AssetBrowser/LibraryAssetElement.uss");
 
 			var ui = rootVisualElement;
 
@@ -148,33 +151,33 @@ namespace VisualPinball.Unity.Editor
 		{
 			var item = new VisualElement();
 			_assetTree.CloneTree(item);
-			item.Q<LibraryAssetElement>().Result = result;
+			item.styleSheets.Add(_assetStyle);
+			var assetElement = item.Q<LibraryAssetElement>();
+			assetElement.Result = result;
 
 			LoadThumb(item, result.Asset);
-			item.style.width = _thumbnailSize;
-			item.style.height = _thumbnailSize;
+			var img = item.Q<VisualElement>("thumbnail-mask");
+			assetElement.SetSize(_thumbnailSize);
+
 			var label = item.Q<Label>("label");
 			label.text = result.Asset.Name;
 			label.style.textOverflow = TextOverflow.Ellipsis;
 			item.RegisterCallback<ClickEvent>(evt => OnAssetClicked(evt, item));
 
-			item.Q<LibraryAssetElement>().RegisterDrag(this);
-			item.AddManipulator(new ContextualMenuManipulator(AddAssetContextMenu));
+			assetElement.RegisterDrag(this);
+			img.AddManipulator(new ContextualMenuManipulator(AddAssetContextMenu));
+			label.AddManipulator(new ContextualMenuManipulator(AddAssetContextMenu));
 			return item;
 		}
 
 		private void LoadThumb(VisualElement el, Asset asset)
 		{
 			if (!_thumbCache.ContainsKey(asset.GUID)) {
-				var thumbPath = $"{asset.Library.ThumbnailRoot}/{asset.GUID}.png";
-				if (File.Exists(thumbPath)) {
-					var tex = new Texture2D(ThumbSize, ThumbSize);
-					tex.LoadImage(File.ReadAllBytes(thumbPath));
-
+				if (asset.HasThumbnail) {
+					var tex = asset.LoadThumbTexture(asset.ThumbnailPath);
 					_thumbCache[asset.GUID] = tex;
 				}
 			}
-
 			if (_thumbCache.ContainsKey(asset.GUID)) {
 				var img = el.Q<Image>("thumbnail");
 				img.image = _thumbCache[asset.GUID];
@@ -197,12 +200,105 @@ namespace VisualPinball.Unity.Editor
 				image = lib.IsLocked ? Icons.Locked(IconSize.Small) : Icons.Unlocked(IconSize.Small)
 			};
 			icon.RegisterCallback<MouseDownEvent>(evt => OnLibraryLockClicked(evt, lib, icon));
+
 			item.Add(icon);
 
 			toggle.value = lib.IsActive;
 			toggle.RegisterValueChangedCallback(evt => OnLibraryToggled(lib, evt.newValue));
 			label.RegisterCallback<MouseDownEvent>(evt => OnLibraryLabelClicked(evt, lib, toggle, icon));
+
+			item.RegisterCallback<DragUpdatedEvent>(OnDragUpdated);
+			item.RegisterCallback<DragPerformEvent>(OnDragPerform);
+			item.RegisterCallback<DragEnterEvent>(OnDragEnter);
+			item.RegisterCallback<DragLeaveEvent>(OnDragLeave);
+			item.userData = lib;
+
 			return item;
+		}
+
+		private void OnDragPerform(DragPerformEvent evt)
+		{
+			if (!IsValidDrag(evt.currentTarget)) {
+				return;
+			}
+			if (evt.currentTarget is not VisualElement item) {
+				return;
+			}
+			var lib = item.userData as AssetLibrary;
+			if (lib == null) {
+				return;
+			}
+			item.RemoveFromClassList(ClassDrag);
+
+			if (EditorUtility.DisplayDialog("Asset Library", "Are you sure you want to move the assets to this library?", "Yes", "No")) {
+				DragAndDrop.AcceptDrag();
+
+				var assets = DragAndDrop.GetGenericData("assets") as HashSet<AssetResult>;
+				foreach (var asset in assets) {
+					asset.Asset.Library.MoveAsset(asset.Asset, lib);
+				}
+				AssetDatabase.SaveAssets();
+				AssetDatabase.Refresh();
+			}
+		}
+
+		private static void OnDragUpdated(DragUpdatedEvent evt)
+		{
+			DragAndDrop.visualMode = IsValidDrag(evt.currentTarget)
+				? DragAndDropVisualMode.Move
+				: DragAndDropVisualMode.Rejected;
+		}
+
+		private static bool IsValidDrag(IEventHandler currentTarget)
+		{
+			DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
+			if (currentTarget is not VisualElement item) {
+				return false;
+			}
+			var lib = item.userData as AssetLibrary;
+			if (lib == null || lib.IsLocked) {
+				return false;
+			}
+			if (DragAndDrop.GetGenericData("assets") is not HashSet<AssetResult> assets) {
+				return false;
+			}
+
+			foreach (var asset in assets) {
+				// check for locked libraries
+				if (asset.Asset.Library.IsLocked) {
+					DragAndDrop.visualMode = DragAndDropVisualMode.Rejected;
+					return false;
+				}
+
+				if (asset.Asset.Library == lib) {
+					// don't allow dragging to the same library
+					return false;
+				}
+			}
+			return true;
+		}
+
+		private void OnDragEnter(DragEnterEvent evt)
+		{
+			if (!IsValidDrag(evt.currentTarget)) {
+				return;
+			}
+			if (evt.currentTarget is not VisualElement item) {
+				return;
+			}
+			if (IsDraggingExistingAssets) {
+				item.AddToClassList(ClassDrag);
+			} else {
+				return;
+			}
+		}
+
+		private void OnDragLeave(DragLeaveEvent evt)
+		{
+			if (evt.currentTarget is not VisualElement item) {
+				return;
+			}
+			item.RemoveFromClassList(ClassDrag);
 		}
 
 		private void OnLibraryLabelClicked(IMouseEvent evt, AssetLibrary lib, Toggle toggle, VisualElement icon)

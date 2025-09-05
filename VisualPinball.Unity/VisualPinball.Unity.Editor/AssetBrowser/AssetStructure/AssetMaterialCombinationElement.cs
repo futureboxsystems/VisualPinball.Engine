@@ -16,24 +16,26 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.UIElements;
-using UnityEngine;
 using UnityEngine.UIElements;
+using Image = UnityEngine.UIElements.Image;
 
 namespace VisualPinball.Unity.Editor
 {
-	public class AssetMaterialCombinationElement: VisualElement
+	public class AssetMaterialCombinationElement : VisualElement
 	{
 		public bool Enabled { set => _toggle.SetValueWithoutNotify(value); }
-		public string Name => Combination.Name;
-		public event EventHandler<bool> OnClicked;
+		public string Name => Combination.Name; //_isDecalVariation ? Combination.Name : Combination.MaterialName;
 
-		private readonly ToolbarToggle _toggle;
+		public event EventHandler<bool> OnClicked;
 
 		public readonly AssetMaterialCombination Combination;
 
-		public AssetMaterialCombinationElement(AssetMaterialCombination combination, Asset asset)
+		private readonly ToolbarToggle _toggle;
+
+		public AssetMaterialCombinationElement(AssetMaterialCombination combination, Asset asset, string name)
 		{
 			Combination = combination;
 
@@ -47,15 +49,11 @@ namespace VisualPinball.Unity.Editor
 			_toggle = ui.Q<ToolbarToggle>("toggle");
 			_toggle.RegisterValueChangedCallback(val => OnClicked?.Invoke(this, val.newValue));
 
-			ui.Q<Label>("label").text = Name;
-
-			var thumbPath = $"{asset.Library.ThumbnailRoot}/{Combination.ThumbId}.png";
-			if (File.Exists(thumbPath)) {
-				var tex = new Texture2D(AssetBrowser.ThumbSize, AssetBrowser.ThumbSize);
-				tex.LoadImage(File.ReadAllBytes(thumbPath));
+			ui.Q<Label>("label").text = name;
+			if (File.Exists(Combination.ThumbPath)) {
+				var tex = asset.LoadThumbTexture(Combination.ThumbPath);
 				ui.Q<Image>("thumbnail").image = tex;
 			}
-
 			Add(ui);
 		}
 	}

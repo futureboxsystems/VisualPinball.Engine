@@ -9,9 +9,35 @@
 	<!-- Unpack Prefab -->
 	<uie:PropertyField binding-path="UnpackPrefab" label="Unpack Prefab" class="top-space" />
 
+	<uie:PropertyField binding-path="GroupBy" label="Group By" class="top-space" />
+
+	<!-- Material Defaults -->
+	<ui:ListView name="defaults"
+				 reorderable="true"
+				 virtualization-method="DynamicHeight"
+				 binding-path="MaterialDefaults"
+				 show-add-remove-footer="true"
+				 show-border="true"
+				 show-foldout-header="true"
+				 show-bound-collection-size="false"
+				 header-title="Material Defaults"
+				 class="top-space padded-first-property-field"/>
+
+	<!-- Material Combination Rules -->
+	<ui:ListView name="combinationRules"
+				 reorderable="true"
+				 virtualization-method="DynamicHeight"
+				 binding-path="MaterialCombinationRules"
+				 show-add-remove-footer="true"
+				 show-border="true"
+				 show-foldout-header="true"
+				 show-bound-collection-size="false"
+				 header-title="Material Combination Rules"
+				 class="top-space"/>
+
 	<!-- Material Overrides -->
 	<ui:ListView name="variations"
-				 reorderable="false"
+				 reorderable="true"
 				 virtualization-method="DynamicHeight"
 				 binding-path="MaterialVariations"
 				 show-add-remove-footer="true"
@@ -19,15 +45,27 @@
 				 show-foldout-header="true"
 				 show-bound-collection-size="false"
 				 header-title="Material Variations"
-				 class="top-space"/>
+				 class="top-space padded-first-property-field"/>
 
-	<!-- Attributes -->
+	<!-- Decals -->
+	<ui:ListView name="decals"
+				 reorderable="true"
+				 virtualization-method="DynamicHeight"
+				 binding-path="DecalVariations"
+				 show-add-remove-footer="true"
+				 show-border="true"
+				 show-foldout-header="true"
+				 show-bound-collection-size="false"
+				 header-title="Decal Variations"
+				 class="top-space padded-first-property-field"/>
+
+	<!-- Tags -->
 	<uie:PropertyField binding-path="Tags" label="Tags" class="top-space" />
 
 	<!-- Attributes -->
 	<uie:PropertyField binding-path="Attributes" label="Attributes" />
 
-	<!-- Tags -->
+	<!-- Links -->
 	<uie:PropertyField binding-path="Links" label="Links" class="top-space" />
 
 	<!-- Geometry -->
@@ -36,6 +74,8 @@
 			<uivpe:ObjectDropdownElement name="environment-field" label="Environment" />
 			<uivpe:PresetDropdownElement name="thumb-camera-preset" binding-path="ThumbCameraPreset" label="Camera" preset-path="Packages/org.visualpinball.engine.unity/VisualPinball.Unity/Assets/Presets/Asset Thumbcam" />
 			<uie:PropertyField binding-path="ThumbCameraHeight" label="Z-Position" />
+			<uie:PropertyField binding-path="ThumbCameraPos" label="Position" />
+			<uie:PropertyField binding-path="ThumbCameraRot" label="Rotation" />
 		</ui:VisualElement>
 	</ui:Foldout>
 

@@ -23,7 +23,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Unity.Mathematics;
 using UnityEngine;
 using VisualPinball.Engine.Common;
@@ -39,7 +38,7 @@ namespace VisualPinball.Unity
 	[PackAs("Spinner")]
 	[AddComponentMenu("Pinball/Game Item/Spinner")]
 	public class SpinnerComponent : MainRenderableComponent<SpinnerData>, ISwitchDeviceComponent,
-		IRotatableAnimationComponent, IPackable
+		IAnimationValueEmitter<float>, IPackable
 	{
 		#region Data
 
@@ -117,8 +116,6 @@ namespace VisualPinball.Unity
 
 		#region Runtime
 
-		[NonSerialized]
-		private IRotatableAnimationComponent[] _animatedComponents;
 
 		public SpinnerApi SpinnerApi { get; private set; }
 
@@ -130,11 +127,11 @@ namespace VisualPinball.Unity
 
 			Player.Register(SpinnerApi, this);
 			RegisterPhysics(physicsEngine);
+		}
 
-			_animatedComponents = GetComponentsInChildren<SpinnerPlateAnimationComponent>()
-				.Select(gwa => gwa as IRotatableAnimationComponent)
-				.Concat(GetComponentsInChildren<SpinnerLeverAnimationComponent>().Select(gwa => gwa as IRotatableAnimationComponent))
-				.ToArray();
+		private void Start()
+		{
+			OnAnimationValueChanged?.Invoke(0);
 		}
 
 		#endregion
@@ -247,7 +244,8 @@ namespace VisualPinball.Unity
 			var movementData = animComponent
 				? new SpinnerMovementState {
 					Angle = math.radians(math.clamp(0.0f, AngleMin, AngleMax)),
-					AngleSpeed = 0f
+					AngleSpeed = 0f,
+					InverseMass = 1 / collComponent.Mass
 				} : default;
 
 			return new SpinnerState(
@@ -259,12 +257,16 @@ namespace VisualPinball.Unity
 
 		#endregion
 
-		#region IRotatableAnimationComponent
+		#region IAnimationValueSource
 
-		public void OnRotationUpdated(float angleRad)
+		public event Action<float> OnAnimationValueChanged;
+		private float _lastAngleRad;
+
+		public void UpdateAnimationValue(float value)
 		{
-			foreach (var animatedComponent in _animatedComponents) {
-				animatedComponent.OnRotationUpdated(angleRad);
+			if (HasAngleChanged(_lastAngleRad, value)) {
+				_lastAngleRad = value;
+				OnAnimationValueChanged?.Invoke(value);
 			}
 		}
 

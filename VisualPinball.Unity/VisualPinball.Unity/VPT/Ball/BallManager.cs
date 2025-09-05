@@ -69,11 +69,24 @@ namespace VisualPinball.Unity
 
 		public void DestroyBall(int ballId)
 		{
-			var ballTransform = _physicsEngine.UnregisterBall(ballId);
-			_player.BallDestroyed(ballId, ballTransform.gameObject);
+			var ballComponent = _physicsEngine.UnregisterBall(ballId);
+			_player.BallDestroyed(ballId, ballComponent.gameObject);
 
 			// destroy game object
-			Object.DestroyImmediate(ballTransform.gameObject);
+			Object.DestroyImmediate(ballComponent.gameObject);
+		}
+
+		public bool FindBall(out BallState ball)
+		{
+			var ballFound = false;
+			using var enumerator = _physicsEngine.Balls.GetEnumerator();
+			ball = default;
+			while (enumerator.MoveNext()) {
+				ball = enumerator.Current.Value;
+				ballFound = true;
+				break;
+			}
+			return ballFound;
 		}
 
 		public bool FindNearest(float2 fromPosition, out BallState nearestBall)

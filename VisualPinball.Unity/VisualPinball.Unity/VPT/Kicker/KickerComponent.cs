@@ -111,6 +111,7 @@ namespace VisualPinball.Unity
 		public SwitchDefault SwitchDefault => SwitchDefault.Configurable;
 
 		public IEnumerable<GamelogicEngineCoil> AvailableCoils => Coils.Select(c => new GamelogicEngineCoil(c.Id) { Description = c.Name });
+		IApiCoil ICoilDeviceComponent.CoilDevice(string deviceId) => ((IApiCoilDevice)KickerApi).Coil(deviceId);
 
 		IEnumerable<GamelogicEngineCoil> IDeviceComponent<GamelogicEngineCoil>.AvailableDeviceItems => AvailableCoils;
 		IEnumerable<GamelogicEngineSwitch> IDeviceComponent<GamelogicEngineSwitch>.AvailableDeviceItems => AvailableSwitches;
@@ -284,8 +285,12 @@ namespace VisualPinball.Unity
 		{
 			#if UNITY_EDITOR
 
+			if (DomainReloadGuard.IsReloading) {
+				return;
+			}
+
 			// don't generate ids for prefabs, otherwise they'll show up in the instances.
-			if (PrefabUtility.GetPrefabInstanceStatus(this) != PrefabInstanceStatus.Connected) {
+			if (EditorUtility.IsPersistent(this) && PrefabUtility.IsPartOfPrefabAsset(this)) {
 				return;
 			}
 			var coilIds = new HashSet<string>();

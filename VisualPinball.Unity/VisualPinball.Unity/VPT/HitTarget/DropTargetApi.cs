@@ -37,6 +37,11 @@ namespace VisualPinball.Unity
 		public event EventHandler<HitEventArgs> Hit;
 
 		/// <summary>
+		/// Event emitted drop target is reset.
+		/// </summary>
+		public event EventHandler Reset;
+
+		/// <summary>
 		/// Event emitted when the trigger is switched on or off.
 		/// </summary>
 		public event EventHandler<SwitchEventArgs> Switch;
@@ -75,6 +80,10 @@ namespace VisualPinball.Unity
 		{
 			ref var state = ref PhysicsEngine.DropTargetState(ItemId);
 			if (state.Animation.IsDropped != isDropped) {
+				if (!isDropped) {
+					Reset?.Invoke(this, EventArgs.Empty);
+					MainComponent.UpdateAnimationValue(false);
+				}
 				state.Animation.MoveAnimation = true;
 				if (isDropped) {
 					state.Animation.MoveDown = true;
@@ -128,6 +137,7 @@ namespace VisualPinball.Unity
 		void IApiHittable.OnHit(int ballId, bool _)
 		{
 			Hit?.Invoke(this, new HitEventArgs(ballId));
+			MainComponent.UpdateAnimationValue(true);
 		}
 
 		#endregion

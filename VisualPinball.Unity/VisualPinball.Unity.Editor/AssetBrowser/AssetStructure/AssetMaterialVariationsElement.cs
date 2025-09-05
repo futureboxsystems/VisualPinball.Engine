@@ -15,9 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace VisualPinball.Unity.Editor
@@ -53,8 +51,7 @@ namespace VisualPinball.Unity.Editor
 
 		public void SetValue(Asset asset)
 		{
-
-			var materialCombinations = AssetMaterialCombination.GetCombinations(asset)
+			var materialCombinations = asset.GetCombinations(true, false, false)
 				.Where(c => !c.IsOriginal)
 				.ToArray();
 
@@ -63,7 +60,11 @@ namespace VisualPinball.Unity.Editor
 				Clear();
 
 				foreach (var combination in materialCombinations) {
-					var combinationEl = new AssetMaterialCombinationElement(combination, asset);
+					var validCombination = combination.GetValidCombination();
+					if (validCombination == null) {
+						continue; // skip invalid combinations
+					}
+					var combinationEl = new AssetMaterialCombinationElement(validCombination, asset, combination.Name);
 					combinationEl.OnClicked += OnVariationClicked;
 					_container.Add(combinationEl);
 				}

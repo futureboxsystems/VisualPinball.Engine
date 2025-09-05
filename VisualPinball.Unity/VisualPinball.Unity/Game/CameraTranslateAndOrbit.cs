@@ -1,245 +1,306 @@
-﻿using UnityEngine;
-using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.EnhancedTouch;
-using Touch = UnityEngine.InputSystem.EnhancedTouch.Touch;
-using TouchPhase = UnityEngine.InputSystem.TouchPhase;
+﻿// Visual Pinball Engine
+// Copyright (C) 2023 freezy and VPE Team
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-/// <summary>
-/// A simple camera orbit script that works with Unity's new Input System.
-/// </summary>
+using UnityEngine;
+using UnityEngine.InputSystem;
+using VisualPinball.Unity;
+
 public class CameraTranslateAndOrbit : MonoBehaviour
 {
-	public float panSpeed = 0.5f;
-	public float orbitSpeed = 0.4f;
-	public float zoomSpeed = 0.1f;
+	[Header("Speeds")] public float panSpeed = 10f;
+	public float orbitSpeed = 10f;
+	public float zoomSpeed = 10f;
+	public float smoothing = 10f;
+	public float ballCamSmoothing = 10f;
 
-	public float smoothing = 1f;
-
+	[Header("Optional scene references")]
 	public Transform initialOrbit;
+	public Transform lockTarget;
+
+	public Player player;
+
+	private const float RadiusMin = 0.5f;
 
 	private Transform _transformCache;
-	public bool isAnimating;
-
 	private GameObject _dummyForRotation;
 	private Transform _dummyTransform;
 
 	private float _radius;
-
 	private Vector3 _focusPoint;
 	private float _radiusCurrent = 15f;
 
-	private bool _isTrackingTouch0;
-	private Vector2 _touch0StartPosition;
-
-	private float _startMultiTouchRadius;
-	private float _startMultiTouchDistance;
-
-	private bool _isTrackingMouse0;
-	private Vector2 _mouse0StartPosition;
-
-	private bool _isTrackingMouse1;
-	private Vector2 _mouse1StartPosition;
-
-	public Vector3 positionOffset = Vector3.zero;
 	private Vector3 _positionOffsetCurrent = Vector3.zero;
-
 	private Quaternion _rot2 = Quaternion.identity;
 
-	private const float RadiusMin = 0.5f;
+	/* input tracking state (unchanged from original – trimmed for brevity) */
+	private bool _isTrackingMouse0;
+	private Vector2 _mouse0StartPosition;
+	private bool _isTrackingMouse1;
+	private Vector2 _mouse1StartPosition;
+	private bool _isTrackingBall;
+	private bool _isTrackingBallTarget;				// ★ NEW: shift-B look-at lock
 
-	private void Awake()
-	{
-		EnhancedTouchSupport.Enable();
-	}
+	// *** BALL-LOCK – offset we keep between camera and ball while tracking
+	private Vector3 _ballFollowOffset = Vector3.zero;
+	private Vector3 _ballFollowVel = Vector3.zero;
+	private float   _orbitYaw;                 // ★ track user-added yaw
+	private float   _orbitPitch;               // ★   …and pitch
+	private Vector3 _smoothedBallPos;
+	private Vector3 _ballPosVel;
+	private Vector3 _ballFollowOffsetTarget;    // ★ where the user wants the offset
+	private Vector3 _ballOffsetVel;             // ★ velocity for SmoothDamp
+
+	public Vector3 positionOffset = Vector3.zero;
+	public bool isAnimating;
+	private Keyboard _keyboard;
+	private Mouse _mouse;
+	private PhysicsEngine _physicsEngine;
+
+	/* -------------------------------------------------------- */
 
 	private void Start()
 	{
-		var pfr = initialOrbit == null ? null : initialOrbit.GetComponent<Renderer>();
-		if (pfr != null) {
-			positionOffset = pfr.bounds.center;
+		// same logic you had before to center on renderer bounds, etc.
+		if (initialOrbit != null) {
+			var pfr = initialOrbit.GetComponent<Renderer>();
+			if (pfr != null) positionOffset = pfr.bounds.center;
 		}
 
-		_radius = Vector3.Distance(Vector3.zero, transform.position);
 		_transformCache = transform;
-		_focusPoint = _transformCache.forward * -1f * _radius;
+		_radius = Vector3.Distance(Vector3.zero, _transformCache.position);
+		_focusPoint = -_transformCache.forward * _radius;
 		_positionOffsetCurrent = positionOffset;
 		_radiusCurrent = _radius;
-		_dummyForRotation = new GameObject();
+
+		_dummyForRotation = new GameObject("[Camera-Dummy-Rotation]");
 		_dummyTransform = _dummyForRotation.transform;
-
-		_dummyTransform.rotation = _transformCache.rotation;
 		_dummyTransform.position = _transformCache.position;
+		_dummyTransform.rotation = _transformCache.rotation;
 		_rot2 = _transformCache.rotation;
+
+		if (player) {
+			_physicsEngine = player.GetComponentInChildren<PhysicsEngine>();
+		}
+		_keyboard = Keyboard.current;
+		_mouse = Mouse.current;
 	}
 
-	private void OrbitAroundObject(Vector3 newOffset, float radiusRef)
-	{
-		positionOffset = newOffset;
-		_positionOffsetCurrent = positionOffset;
-		_radius = radiusRef;
-		_radiusCurrent = _radius;
-	}
-
-	// Update is called once per frame
 	private void Update()
 	{
-		if (Touchscreen.current != null) {
-			UpdateTouchscreen();
+		// toggle ball lock if "b" pressed
+		if (player && _keyboard.bKey.wasPressedThisFrame) {
 
-			return;
+			if (_keyboard.shiftKey.isPressed) {					// ⇧B → target-lock
+				if (_isTrackingBallTarget) {
+					lockTarget = null;
+					_isTrackingBallTarget = false;
+				} else {
+					LockBallTarget();
+					_isTrackingBallTarget = lockTarget != null;
+					_isTrackingBall = false;
+				}
+
+			} else {											// B → follow-lock
+
+				if (_isTrackingBall) {
+					lockTarget = null;
+
+				} else {
+					LockBall();
+				}
+				_isTrackingBall = !_isTrackingBall;
+				if (_isTrackingBall) _isTrackingBallTarget = false;
+			}
+		}
+		// if (_isTrackingBall && lockTarget == null) {			// if ball got destroyed but still tracking, try to lock again.
+		// 	LockBall();
+		// }
+		if (_isTrackingBallTarget && lockTarget == null) {
+			LockBallTarget();
 		}
 
-		if (Mouse.current != null) {
+		if (_mouse != null) {
 			UpdateMouse();
 		}
 	}
 
-	private void UpdateTouchscreen()
+	private void LateUpdate()
 	{
-		if (Touch.activeFingers.Count == 1) {
-			Touch touch = Touch.activeTouches[0];
+		if (lockTarget == null) return;
 
-			_transformCache.position = _dummyTransform.position = Vector3.zero;
+		/* --- 1. smooth the ball itself --- */
+		_smoothedBallPos = Vector3.SmoothDamp(
+			_smoothedBallPos,
+			lockTarget.position,
+			ref _ballPosVel,
+			ballCamSmoothing * Time.deltaTime);
 
-			var hasHitRestrictedHitArea = false;
+		/* --- follow-lock moves camera; target-lock doesn’t --- */
+		if (_isTrackingBall) {
 
-			if (touch.phase == TouchPhase.Began) {
-				_touch0StartPosition = touch.screenPosition;
-				_isTrackingTouch0 = true;
-			}
+			/* --- 2. smooth the user-driven orbit offset --- */
+			_ballFollowOffset = Vector3.SmoothDamp(
+				_ballFollowOffset,
+				_ballFollowOffsetTarget,
+				ref _ballOffsetVel,
+				ballCamSmoothing * Time.deltaTime);
 
-			if (_touch0StartPosition.x < 200f && _touch0StartPosition.y > Screen.height - 200f) {
-				hasHitRestrictedHitArea = true;
-			}
-
-			if (!hasHitRestrictedHitArea) {
-				if (_isTrackingTouch0) {
-					Vector3 touchPositionDifference = touch.screenPosition - _touch0StartPosition;
-					_dummyTransform.Rotate(Vector3.up, touchPositionDifference.x * orbitSpeed / 4, Space.World);
-
-					_dummyTransform.Rotate(_dummyTransform.right.normalized, touchPositionDifference.y * -orbitSpeed,
-						Space.World);
-					_rot2 = _dummyTransform.rotation;
-					_touch0StartPosition = touch.screenPosition;
-				}
-				_transformCache.rotation = Quaternion.Lerp(_transformCache.rotation, _rot2, Time.deltaTime / smoothing * 4);
-			}
-
-			if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled) {
-				_isTrackingTouch0 = false;
-			}
-		}
-		else if (Touch.activeFingers.Count == 2) {
-			var firstTouch = Touch.activeTouches[0];
-			var secondTouch = Touch.activeTouches[1];
-
-			_transformCache.position = _dummyTransform.position = Vector3.zero;
-
-			if (firstTouch.phase == TouchPhase.Began || secondTouch.phase == TouchPhase.Began) {
-				_startMultiTouchDistance = Vector2.Distance(firstTouch.screenPosition, secondTouch.screenPosition);
-
-				_startMultiTouchRadius = _radius;
-			}
-
-			if (firstTouch.phase == TouchPhase.Moved || secondTouch.phase == TouchPhase.Moved) {
-				_radius = _startMultiTouchRadius;
-
-				var distance = Vector2.Distance(firstTouch.screenPosition, secondTouch.screenPosition) - _startMultiTouchDistance;
-				var delta = distance / 250 * zoomSpeed * -_radius;
-
-				_radius += delta;
-
-				if (_radius < RadiusMin) {
-					var radDiff = RadiusMin - _radius;
-					positionOffset += _transformCache.forward * (radDiff * 4f);
-					_radius = RadiusMin;
-				}
-			}
+			/* --- 3. final camera placement --- */
+			_transformCache.position = _smoothedBallPos + _ballFollowOffset;
 		}
 
-		_positionOffsetCurrent = Vector3.Lerp(_positionOffsetCurrent, positionOffset, Time.deltaTime * 4f);
-		_radiusCurrent = Mathf.Lerp(_radiusCurrent, _radius, Time.deltaTime * 4f);
-		_focusPoint = _transformCache.forward * -1f * _radiusCurrent;
-		_transformCache.position = _focusPoint + _positionOffsetCurrent;
+		/* -------- look-at rotation (shared) -------- */
+		_transformCache.rotation = Quaternion.LookRotation(
+			_smoothedBallPos - _transformCache.position,
+			Vector3.up);
+		/* ------------------------------------------- */
+
+		/* keep helpers coherent so you can unlock cleanly */
 		_dummyTransform.position = _transformCache.position;
+		_dummyTransform.rotation = _transformCache.rotation;
+		_rot2 = _transformCache.rotation;
+	}
+
+	private void LockBall()
+	{
+		if (player.BallManager.FindBall(out var ballData)) {
+			lockTarget = _physicsEngine.GetBall(ballData.Id).transform;
+			if (lockTarget != null) {
+				_ballFollowOffset       =
+					_ballFollowOffsetTarget = _transformCache.position - lockTarget.position;   // ★ init both
+				_ballFollowVel          = Vector3.zero;
+				_ballOffsetVel          = Vector3.zero;                                     // ★
+				_orbitYaw   = 0f;
+				_orbitPitch = 0f;
+				_smoothedBallPos = lockTarget.position;
+			}
+		}
+	}
+
+	private void LockBallTarget()
+	{
+		if (player.BallManager.FindBall(out var ballData)) {
+			lockTarget = _physicsEngine.GetBall(ballData.Id).transform;
+			if (lockTarget != null) {
+				_smoothedBallPos = lockTarget.position;
+				_ballPosVel = Vector3.zero;
+			}
+		}
 	}
 
 	private void UpdateMouse()
 	{
-		_transformCache.position = _dummyTransform.position = Vector3.zero;
+		/* -------------- KEEP THIS NEW BLOCK AT THE VERY TOP -------------- */
+		// ★ When we’re **not** locked-on, keep the “dummy” pivot parked at
+		//   (0,0,0) every frame so free-orbit behaves exactly like before.
+		if (lockTarget == null)
+		{
+			_transformCache.position  = Vector3.zero;
+			_dummyTransform.position  = Vector3.zero;
+		}
+		/* ----------------------------------------------------------------- */
 
-		var hasHitRestrictedHitArea = false;
+		bool hasHitRestrictedHitArea = false;
 
-		if (Mouse.current.leftButton.wasPressedThisFrame) {
-			_mouse0StartPosition = Mouse.current.position.ReadValue();
+		/* ========== ORBIT (left mouse) ========== */
+		if (_mouse.leftButton.wasPressedThisFrame) {
+			_mouse0StartPosition = _mouse.position.ReadValue();
 			_isTrackingMouse0 = true;
 		}
 
-		if (_mouse0StartPosition.x < 200f && _mouse0StartPosition.y > Screen.height - 200f) {
-			hasHitRestrictedHitArea = true;
-		}
+		/* ---------------- ORBIT (left mouse) ---------------- */
+		if (_isTrackingMouse0) {
+			var delta = _mouse.position.ReadValue() - _mouse0StartPosition;
+			_mouse0StartPosition = _mouse.position.ReadValue();
 
-		if (!hasHitRestrictedHitArea) {
-			if (_isTrackingMouse0) {
-				Vector3 mousePositionDifference = Mouse.current.position.ReadValue() - _mouse0StartPosition;
-				_dummyTransform.Rotate(Vector3.up, mousePositionDifference.x * orbitSpeed, Space.World);
+			if (!hasHitRestrictedHitArea) {
+				float yawDelta   =  delta.x * orbitSpeed / 75f;
+				float pitchDelta = -delta.y * orbitSpeed / 75f;
 
-				_dummyTransform.Rotate(_dummyTransform.right.normalized, mousePositionDifference.y * -orbitSpeed,
-					Space.World);
-				_rot2 = _dummyTransform.rotation;
-				_mouse0StartPosition = Mouse.current.position.ReadValue();
-			}
-			_transformCache.rotation = Quaternion.Lerp(_transformCache.rotation, _rot2, Time.deltaTime / smoothing * 4);
-		}
+				if (lockTarget != null && _isTrackingBall) {
+					/* ---------- locked-on orbit (already working) ---------- */
+					_orbitYaw   += yawDelta;
+					_orbitPitch  = Mathf.Clamp(_orbitPitch + pitchDelta, -80f, 80f);
 
-		if (Mouse.current.leftButton.wasReleasedThisFrame) {
-			_isTrackingMouse0 = false;
-		}
+					Quaternion q = Quaternion.Euler(_orbitPitch, _orbitYaw, 0f);
+					float r = _ballFollowOffsetTarget.magnitude;
+					_ballFollowOffsetTarget = q * (Vector3.back * r);
+				}
+				else if (lockTarget == null) {
+					/* ---------- FREE ORBIT  —  PUT THESE LINES BACK ---------- */
+					_transformCache.position  = Vector3.zero;         // pivot at world-origin
+					_dummyTransform.position  = Vector3.zero;
 
-		if (Mouse.current.rightButton.wasPressedThisFrame) {
-			_mouse1StartPosition = Mouse.current.position.ReadValue();
-			_isTrackingMouse1 = true;
-		}
+					_dummyTransform.Rotate(Vector3.up,              yawDelta,   Space.World);
+					_dummyTransform.Rotate(_dummyTransform.right.normalized,   pitchDelta, Space.World);
 
-		if (!hasHitRestrictedHitArea) {
-			if (_isTrackingMouse1) {
-				var mousePositionDifference = Mouse.current.position.ReadValue() - _mouse1StartPosition;
-				//Vector3 XZPlanerDirection = transformCache.forward.normalized;
-				//XZPlanerDirection.y = 0;
-
-				positionOffset += _transformCache.up.normalized * (mousePositionDifference.y * -(_radius * panSpeed / 100f));
-				positionOffset += _transformCache.right.normalized * (mousePositionDifference.x * -(_radius * panSpeed / 100f));
-
-				/*
-				if(positionOffset.y < 0){
-					positionOffset.y = 0;
-				}*/
-
-				_mouse1StartPosition = Mouse.current.position.ReadValue();
-			}
-		}
-
-		if (Mouse.current.rightButton.wasReleasedThisFrame) {
-			_isTrackingMouse1 = false;
-		}
-
-		if (!hasHitRestrictedHitArea) {
-			if (!isAnimating) {
-				var delta = Mouse.current.scroll.y.ReadValue() / 10f * zoomSpeed * -_radius;
-				_radius += delta;
-				if (_radius < RadiusMin) {
-					var radDiff = RadiusMin - _radius;
-					positionOffset += _transformCache.forward * (radDiff * 4f);
-					_radius = RadiusMin;
+					_rot2 = _dummyTransform.rotation;                 // used by smoothing
 				}
 			}
 		}
 
-		_positionOffsetCurrent = Vector3.Lerp(_positionOffsetCurrent, positionOffset, Time.deltaTime / smoothing * 4);
-		_radiusCurrent = Mathf.Lerp(_radiusCurrent, _radius, Time.deltaTime / smoothing * 4);
+		if (_mouse.leftButton.wasReleasedThisFrame) {
+			_isTrackingMouse0 = false;
+		}
 
-		_focusPoint = _transformCache.forward * -1f * _radiusCurrent;
-		_transformCache.position = _focusPoint + _positionOffsetCurrent;
-		_dummyTransform.position = _transformCache.position;
+		if (lockTarget == null) {
+
+			/* ---------------- right mouse: pan ---------------- */
+			if (_mouse.rightButton.wasPressedThisFrame) {
+				_mouse1StartPosition = _mouse.position.ReadValue();
+				_isTrackingMouse1 = true;
+			}
+
+			if (!hasHitRestrictedHitArea && _isTrackingMouse1) {
+				var delta = _mouse.position.ReadValue() - _mouse1StartPosition;
+				positionOffset += _transformCache.up * (-delta.y * (_radius * panSpeed / 60000f));
+				positionOffset += _transformCache.right * (-delta.x * (_radius * panSpeed / 60000f));
+				_mouse1StartPosition = _mouse.position.ReadValue();
+			}
+
+			if (_mouse.rightButton.wasReleasedThisFrame) {
+				_isTrackingMouse1 = false;
+			}
+		}
+
+		/* ========== ZOOM (scroll) ========== */
+		if (!isAnimating && !hasHitRestrictedHitArea) {
+			float deltaScroll = _mouse.scroll.y.ReadValue() / 300f * zoomSpeed;
+			/* ---------------  UpdateMouse() – ZOOM in lock  --------------- */
+			if (lockTarget != null && _isTrackingBall) {      // ★ only follow-lock zooms
+				float r = Mathf.Max(_ballFollowOffsetTarget.magnitude * (1f - deltaScroll), RadiusMin);
+				_ballFollowOffsetTarget = _ballFollowOffsetTarget.normalized * r;
+			} else if (lockTarget == null) {
+				/* original zoom path (unchanged) */
+				_radius  = Mathf.Max(_radius  - deltaScroll * _radius, RadiusMin);
+			}
+		}
+
+		/* ========== free-orbit smoothing (only when unlocked) ========== */
+		if (lockTarget == null) {
+			_transformCache.rotation = Quaternion.Lerp(
+				_transformCache.rotation, _rot2, Time.deltaTime / smoothing * 80f);
+
+			_positionOffsetCurrent = Vector3.Lerp(
+				_positionOffsetCurrent, positionOffset, Time.deltaTime / smoothing * 80f);
+			_radiusCurrent = Mathf.Lerp(_radiusCurrent, _radius, Time.deltaTime / smoothing * 80f);
+
+			_focusPoint          = _transformCache.forward * -_radiusCurrent;
+			_transformCache.position = _focusPoint + _positionOffsetCurrent;
+			_dummyTransform.position = _transformCache.position;
+		}
 	}
 }

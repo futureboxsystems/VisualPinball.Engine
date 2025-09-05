@@ -17,6 +17,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -31,13 +32,13 @@ namespace VisualPinball.Unity.Editor
 		private readonly ObjectField _objectPicker;
 
 		[UxmlAttribute("label")]
-		private string Label { set => _dropdown.label = value; }
+		public string Label { set => _dropdown.label = value; }
 
 		[UxmlAttribute("binding-path")]
-		private string BindingPath { set => _objectPicker.bindingPath = value; }
+		public string BindingPath { set => _objectPicker.bindingPath = value; }
 
 		[UxmlAttribute("tooltip")]
-		private string Tooltip { set => _dropdown.tooltip = value; }
+		public string Tooltip { set => _dropdown.tooltip = value; }
 
 		public Object Value { get => _objectPicker.value; set => SetValue(value); }
 		public bool HasValue => _objectPicker.value as GameObject != null;
@@ -58,6 +59,12 @@ namespace VisualPinball.Unity.Editor
 
 			Add(_objectPicker);
 			Add(_dropdown);
+		}
+
+		public ObjectDropdownElement(SerializedProperty property, string label) : this()
+		{
+			Label = label;
+			BindingPath = property.propertyPath;
 		}
 
 		public void RegisterValueChangedCallback(Action<Object> onValueChanged)

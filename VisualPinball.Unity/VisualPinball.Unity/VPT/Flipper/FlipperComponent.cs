@@ -43,8 +43,8 @@ namespace VisualPinball.Unity
 	[AddComponentMenu("Pinball/Game Item/Flipper")]
 	[HelpURL("https://docs.visualpinball.org/creators-guide/manual/mechanisms/flippers.html")]
 	public class FlipperComponent : MainRenderableComponent<FlipperData>,
-		IFlipperData, ISwitchDeviceComponent, ICoilDeviceComponent,
-		IRotatableComponent, IPackable
+		IFlipperData, ISwitchDeviceComponent, ICoilDeviceComponent, IAnimationValueEmitter<float>,
+		IPackable
 	{
 		#region Data
 
@@ -164,6 +164,8 @@ namespace VisualPinball.Unity
 			}
 			: new[] { new GamelogicEngineCoil(MainCoilItem) };
 
+		IApiCoil ICoilDeviceComponent.CoilDevice(string deviceId) => ((IApiCoilDevice)FlipperApi).Coil(deviceId);
+
 		IEnumerable<GamelogicEngineCoil> IDeviceComponent<GamelogicEngineCoil>.AvailableDeviceItems => AvailableCoils;
 		IEnumerable<GamelogicEngineSwitch> IDeviceComponent<GamelogicEngineSwitch>.AvailableDeviceItems => AvailableSwitches;
 		IEnumerable<IGamelogicEngineDeviceItem> IWireableComponent.AvailableWireDestinations => AvailableCoils;
@@ -188,23 +190,6 @@ namespace VisualPinball.Unity
 		}
 
 		private FlipperApi _flipperApi;
-		public float _originalRotateZ;
-
-		public float RotateZ {
-			set {
-				StartAngle = _originalRotateZ + value;
-				_flipperApi.StartAngle = _originalRotateZ + value;
-				UpdateTransforms();
-			}
-		}
-
-		public float2 RotatedPosition {
-			get => new(Position.x, Position.y);
-			set {
-				Position = new Vector3(value.x, value.y, Position.z);
-				UpdateTransforms();
-			}
-		}
 
 		#endregion
 
@@ -367,6 +352,9 @@ namespace VisualPinball.Unity
 				(start, end) = (end, start);
 			}
 			AddPolyArc(arrow, Vector3.zero, FlipperRadiusMax - 20F, start, end, height: height);
+			if (arrow.Count == 0) {
+				return;
+			}
 			for (int i = 1, j = 0; i < arrow.Count; j = i++) {
 				Gizmos.DrawLine(transform.TransformPoint(arrow[j].TranslateToWorld()), transform.TransformPoint(arrow[i].TranslateToWorld()));
 			}
@@ -464,10 +452,12 @@ namespace VisualPinball.Unity
 		#region Runtime
 
 		public FlipperApi FlipperApi { get; private set; }
+		public event Action<float> OnAnimationValueChanged;
+
+		private float _lastRotationAngle;
 
 		private void Awake()
 		{
-			_originalRotateZ = StartAngle;
 			var player = GetComponentInParent<Player>();
 			var physicsEngine = GetComponentInParent<PhysicsEngine>();
 			FlipperApi = new FlipperApi(gameObject, player, physicsEngine);
@@ -479,6 +469,15 @@ namespace VisualPinball.Unity
 		private void Start()
 		{
 			_flipperApi = GetComponentInParent<Player>().TableApi.Flipper(this);
+		}
+
+		public void UpdateAnimationValue(float value)
+		{
+			if (HasAngleChanged(_lastRotationAngle, value)) {
+				_lastRotationAngle = value;
+				transform.SetLocalYRotation(value);
+				OnAnimationValueChanged?.Invoke(value);
+			}
 		}
 
 		#endregion
@@ -716,5 +715,7 @@ namespace VisualPinball.Unity
 		}
 
 		#endregion
+
+
 	}
 }

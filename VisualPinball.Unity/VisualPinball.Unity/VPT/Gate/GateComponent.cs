@@ -23,7 +23,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Unity.Mathematics;
 using UnityEngine;
 using VisualPinball.Engine.Common;
@@ -38,7 +37,7 @@ namespace VisualPinball.Unity
 	[PackAs("Gate")]
 	[AddComponentMenu("Pinball/Game Item/Gate")]
 	public class GateComponent : MainRenderableComponent<GateData>,
-		IGateData, ISwitchDeviceComponent, IRotatableAnimationComponent, IPackable
+		IGateData, ISwitchDeviceComponent, IAnimationValueEmitter<float>, IPackable
 	{
 		#region Data
 
@@ -115,9 +114,6 @@ namespace VisualPinball.Unity
 
 		#region Runtime
 
-		[NonSerialized]
-		private IRotatableAnimationComponent[] _animatedComponents;
-
 		public GateApi GateApi { get; private set; }
 
 		private void Awake()
@@ -130,10 +126,6 @@ namespace VisualPinball.Unity
 			if (GetComponent<GateColliderComponent>()) {
 				RegisterPhysics(physicsEngine);
 			}
-
-			_animatedComponents = GetComponentsInChildren<GateWireAnimationComponent>()
-				.Select(gwa => gwa as IRotatableAnimationComponent)
-				.ToArray();
 		}
 
 		#endregion
@@ -295,12 +287,16 @@ namespace VisualPinball.Unity
 
 		#endregion
 
-		#region IRotatableAnimationComponent
+		#region IAnimationValueEmitter
 
-		public void OnRotationUpdated(float angleRad)
+		public event Action<float> OnAnimationValueChanged;
+		private float _lastAngleRad;
+
+		public void UpdateAnimationValue(float value)
 		{
-			foreach (var animatedComponent in _animatedComponents) {
-				animatedComponent.OnRotationUpdated(angleRad);
+			if (HasAngleChanged(_lastAngleRad, value)) {
+				_lastAngleRad = value;
+				OnAnimationValueChanged?.Invoke(value);
 			}
 		}
 
